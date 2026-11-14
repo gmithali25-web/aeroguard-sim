@@ -39,6 +39,17 @@ FLIGHT_PROFILES = {
         "description": "Initial launch pad phase with high acoustic resonance and structural vibration."
     }
 }
+# --- NASA PSI DATASET LOADER ---
+@st.cache_data
+def load_nasa_psi_database():
+    try:
+        df = pd.read_excel("PSI-117_Analyzed Data_ReadMe_List_of_Data.xlsx")
+    except:
+        df = pd.read_csv("psi_data.csv")
+    return df
+
+df = load_nasa_psi_database()
+
 from datetime import datetime
 
 # Page Configuration
