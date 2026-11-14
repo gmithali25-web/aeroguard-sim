@@ -177,7 +177,7 @@ def load_nasa_psi_database():
 
 df = load_nasa_psi_database()
 
-# Sidebar Controls
+    # Sidebar Controls
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Mission Flight Phase")
     
@@ -190,9 +190,10 @@ df = load_nasa_psi_database()
     
     active_profile = FLIGHT_PROFILES[selected_phase_key]
 
-st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
-st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
-if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
+    st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
+    if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
     st.session_state.logged_in = False
     st.session_state.user_email = ""
     st.rerun()
