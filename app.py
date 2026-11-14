@@ -1,776 +1,333 @@
-"""
-AeroGuard v6.0 — Aerospace Hazard Intelligence & Response Research Simulator
-
-IMPORTANT:
-- All telemetry, sensors, failure injection, predictions, physics, and actuators are simulated.
-- This is an educational/research prototype, not certified aerospace/flight software.
-- Do not connect it to real spacecraft, aircraft, life-support, fire-suppression, or power hardware.
-- The material reference rows are inherited app sample data and are NOT verified NASA measurements.
-"""
 from __future__ import annotations
-
-import json
 import math
-import sqlite3
-import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
-VERSION = "6.0"
-DB_PATH = Path("aeroguard_v6.sqlite3")
-MODULES = [
-    "ISS - Destiny Laboratory",
-    "ISS - Harmony Node 2",
-    "Lunar Gateway - HALO",
-    "Orion Crew Capsule",
-]
-MATERIALS = [
-    "Gaseous Propane", "Solid PMMA (Acrylic)", "Methane Jet",
-    "ETFE Wire Insulation", "Ethanol Droplet", "Cotton-Fiberglass Nomex",
-    "Cast PMMA Rod", "n-Heptane Droplet", "Ethylene Coflow", "Silicone Composite",
-]
-SIGNALS = ["CO_ppm", "Smoke_pct", "Temp_C", "O2_pct", "CO2_ppm",
-           "Pressure_kPa", "Humidity_pct"]
+st.set_page_config(page_title="AeroGuard | Research Mission Control", page_icon="🛰️",
+                   layout="wide", initial_sidebar_state="expanded")
 
-st.set_page_config(
-    page_title=f"AeroGuard v{VERSION}",
-    page_icon="🛰️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# ---------- THEME ----------
 st.markdown("""
 <style>
-.stApp {background: #09111e;}
-section[data-testid="stSidebar"] {background: #111d2e;}
-div[data-testid="stMetric"] {
-  background: #132238; border: 1px solid #29405e;
-  padding: 12px; border-radius: 12px;
-}
-.ag-banner {padding: 13px; border-radius: 10px; text-align:center;
-  font-weight:700; margin: 8px 0 16px;}
-.ag-ok {background:#073b32; color:#d1fae5; border:1px solid #10b981;}
-.ag-warn {background:#49320a; color:#fef3c7; border:1px solid #f59e0b;}
-.ag-alarm {background:#551b25; color:#fee2e2; border:1px solid #ef4444;}
-.small-muted {color:#9fb1c8; font-size:0.88rem;}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+:root { --bg:#050d1b; --panel:#09182b; --panel2:#0b2038; --line:#173653;
+        --cyan:#22d3ee; --teal:#19d3b0; --muted:#8ba7c2; --white:#eaf4ff; }
+.stApp { background:radial-gradient(ellipse at 50% 0%, #0a1c33 0%, #050d1b 58%); color:var(--white); }
+html, body, [class*="css"] { font-family:Inter,sans-serif; }
+section[data-testid="stSidebar"] { background:#061326; border-right:1px solid #173653; }
+section[data-testid="stSidebar"] * { color:#d8e8f7; }
+.block-container { padding-top:1.1rem; padding-bottom:2rem; max-width:1800px; }
+h1,h2,h3 { letter-spacing:-.035em; }
+.ag-top { display:flex; justify-content:space-between; align-items:center; padding:8px 2px 15px;
+          border-bottom:1px solid #173653; margin-bottom:16px; }
+.ag-brand { font-size:1.22rem; font-weight:800; letter-spacing:.12em; color:#f1f8ff; }
+.ag-brand span { color:#22d3ee; }
+.ag-sub { font-size:.66rem; letter-spacing:.22em; color:#7796b3; }
+.ag-online { color:#2ee6bd; font-family:'Space Mono'; font-size:.72rem; }
+.ag-panel { background:linear-gradient(145deg,rgba(12,32,55,.97),rgba(6,19,36,.98));
+            border:1px solid #173653; border-radius:13px; padding:14px 16px;
+            box-shadow:0 8px 28px rgba(0,0,0,.18); margin-bottom:12px; }
+.ag-panel-title { color:#dcecff; font-size:.91rem; font-weight:700; margin-bottom:8px; }
+.ag-muted { color:#8ba7c2; font-size:.76rem; }
+.ag-kpi { background:linear-gradient(145deg,#0c2340,#08172a); border:1px solid #1b4263;
+          border-radius:11px; padding:12px 14px; min-height:92px; }
+.ag-kpi-label { color:#8ba7c2; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; }
+.ag-kpi-value { color:#f1f8ff; font-family:'Space Mono'; font-size:1.35rem; font-weight:700; margin-top:5px; }
+.ag-kpi-foot { color:#25d8c0; font-size:.68rem; margin-top:3px; }
+.ag-chip { display:inline-block; border:1px solid #176b70; background:#073b40; color:#67f3df;
+           border-radius:20px; padding:3px 9px; font-size:.65rem; font-weight:700; letter-spacing:.06em; }
+.ag-rule { border-top:1px solid #173653; margin:10px 0; }
+div[data-testid="stMetric"] { background:#0b2038; border:1px solid #173653; padding:10px 12px; border-radius:10px; }
+div[data-testid="stMetricLabel"] { color:#8ba7c2; }
+div[data-testid="stMetricValue"] { color:#f1f8ff; font-family:'Space Mono'; }
+.stButton>button, .stDownloadButton>button { background:#073b50; border:1px solid #167d96; color:#dffaff;
+  border-radius:8px; font-weight:600; }
+.stButton>button:hover, .stDownloadButton>button:hover { border-color:#22d3ee; color:white; }
+div[data-testid="stDataFrame"] { border:1px solid #173653; border-radius:8px; }
+.stTabs [data-baseweb="tab-list"] { gap:8px; }
+.stTabs [data-baseweb="tab"] { background:#09182b; border:1px solid #173653; border-radius:8px 8px 0 0; }
+.stTabs [aria-selected="true"] { color:#22d3ee !important; }
+label, .stMarkdown p { color:#d5e6f5; }
+footer {visibility:hidden;}
 </style>
 """, unsafe_allow_html=True)
 
+# ---------- HELPERS ----------
+def panel_title(title, right=""):
+    st.markdown(f'<div class="ag-panel-title">{title} <span style="float:right;color:#22d3ee;font-size:.68rem">{right}</span></div>', unsafe_allow_html=True)
 
-@st.cache_data
-def reference_data() -> pd.DataFrame:
-    # Preserved from the supplied AeroGuard v5 application.
-    # These are app-provided illustrative rows, not validated NASA test data.
+def kpi(label, value, foot=""):
+    st.markdown(f'<div class="ag-kpi"><div class="ag-kpi-label">{label}</div><div class="ag-kpi-value">{value}</div><div class="ag-kpi-foot">{foot}</div></div>', unsafe_allow_html=True)
+
+def dark_fig(fig, height=270):
+    fig.update_layout(template="plotly_dark", height=height, margin=dict(l=8,r=8,t=28,b=8),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      font=dict(family="Inter",color="#c9dced",size=11),
+                      legend=dict(orientation="h",y=1.12,x=0),
+                      xaxis=dict(gridcolor="#173653",zerolinecolor="#173653"),
+                      yaxis=dict(gridcolor="#173653",zerolinecolor="#173653"))
+    return fig
+
+def isa_atmosphere(alt_m):
+    """Simplified layered US Standard Atmosphere calculation, geopotential altitude."""
+    h = float(np.clip(alt_m, 0, 27432))
+    layers = [(0,288.15,-0.0065),(11000,216.65,0.0),(20000,216.65,0.001)]
+    g0, R = 9.80665, 287.05287
+    base_p = [101325.0]
+    for i in range(1, len(layers)):
+        hb, tb, lapse = layers[i-1]
+        hn, tn, _ = layers[i]
+        if abs(lapse) < 1e-12:
+            p = base_p[-1]*math.exp(-g0*(hn-hb)/(R*tb))
+        else:
+            p = base_p[-1]*(tn/tb)**(-g0/(lapse*R))
+        base_p.append(p)
+    if h < 11000:
+        hb,tb,L=layers[0]; p=base_p[0]*(1+L*(h-hb)/tb)**(-g0/(L*R)); T=tb+L*h
+    elif h < 20000:
+        hb,tb,L=layers[1]; p=base_p[1]*math.exp(-g0*(h-hb)/(R*tb)); T=tb
+    else:
+        hb,tb,L=layers[2]; T=tb+L*(h-hb); p=base_p[2]*(T/tb)**(-g0/(L*R))
+    rho=p/(R*T); a=math.sqrt(1.4*R*T)
+    return T, p, rho, a
+
+def demo_combustion():
+    rng=np.random.default_rng(17)
+    n=48
     return pd.DataFrame({
-        "Mission_ID": ["FLEX-01", "BASS-02", "SPICE-01", "SAME-R", "FLEX-02",
-                       "Saffire-IV", "BASS-M", "FLEX-ICE", "ACME-E", "Saffire-V"],
-        "Fuel_Material": MATERIALS,
-        "Class": ["Hydrocarbon Gas", "Thermoplastic", "Hydrocarbon Gas",
-                  "Avionics Wiring", "Liquid Propellant", "Crew Fabric",
-                  "Thermoplastic", "Liquid Fuel", "Gas Jet", "Sealant/Polymer"],
-        "Oxygen_Pct": [18, 30, 21, 24.5, 35, 26, 22, 28, 23.5, 32],
-        "Airflow_cm_s": [5, 10.2, 2.1, .8, 15, 12, 1.5, 4, 6.5, 8],
-        "Flame_Spread_mm_s": [3.2, 14.8, 4.5, 1.9, 22.4, 18.5, 2.8, 11.2, 7.6, 13.4],
-        "Radiative_Flux_kW_m2": [12.5, 45, 18.2, 9.4, 58, 38.5, 14, 32.1, 21, 36.8],
-        "Limiting_O2_Index": [15.5, 17.8, 16.2, 19, 14.8, 20.5, 18.2, 15.2, 16, 21],
-        "Quench_Difficulty": ["Low", "High", "Moderate", "Moderate", "Critical",
-                              "High", "Low", "High", "Moderate", "High"],
+        "Experiment_ID":[f"DEMO-{i:03d}" for i in range(1,n+1)],
+        "Fuel":[["Heptane droplet","Methane","PMMA","Ethanol"][i%4] for i in range(n)],
+        "Oxygen_pct":rng.uniform(15,30,n).round(2),
+        "Ambient_T_K":rng.uniform(285,305,n).round(2),
+        "Pressure_kPa":rng.uniform(90,103,n).round(2),
+        "Initial_diameter_mm":rng.uniform(0.8,2.4,n).round(3),
+        "Flame_duration_s":rng.uniform(1.2,18,n).round(2),
+        "Outcome":rng.choice(["Sustained","Extinguished"],n,p=[.62,.38])
     })
 
+# ---------- SIDEBAR ----------
+with st.sidebar:
+    st.markdown('<div style="padding:8px 2px 18px"><div class="ag-brand">✧ AERO<span>GUARD</span></div><div class="ag-sub">AEROSPACE RESEARCH SYSTEMS</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ag-chip">● RESEARCH WORKSPACE ONLINE</div>', unsafe_allow_html=True)
+    page = st.radio("NAVIGATION", ["Mission Dashboard","Combustion Explorer","Swarm Intelligence Lab",
+        "Fire Safety Insights","Ascent Environment","Aerothermal Analysis","Research Library"],
+        label_visibility="visible")
+    st.markdown("---")
+    st.caption("ACTIVE WORKSPACE")
+    st.markdown("**Microgravity Combustion**")
+    st.caption("Secondary system · SLS ascent environment")
+    st.markdown("---")
+    st.caption("DATA INTEGRITY")
+    st.caption("Demo records are labelled. NASA measurements are not fabricated or implied.")
 
-REF = reference_data()
+# ---------- TOP HEADER ----------
+now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+st.markdown(f"""
+<div class="ag-top">
+ <div><div class="ag-brand">AEROGUARD <span>MISSION CONTROL</span></div>
+ <div class="ag-sub">FLAME IN FREEFALL · SI-POWERED COMBUSTION RESEARCH</div></div>
+ <div style="text-align:right"><div class="ag-online">● SYSTEM ONLINE</div>
+ <div style="font-family:'Space Mono';font-size:.7rem;color:#8ba7c2">UTC {now}</div></div>
+</div>""", unsafe_allow_html=True)
 
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
-def db_connect():
-    con = sqlite3.connect(DB_PATH, timeout=15, check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    return con
-
-
-def init_db():
-    with db_connect() as con:
-        con.execute("""CREATE TABLE IF NOT EXISTS events (
-            id TEXT PRIMARY KEY, timestamp TEXT, username TEXT, module TEXT,
-            scenario TEXT, event_type TEXT, status TEXT, risk_score REAL,
-            details TEXT
-        )""")
-        con.execute("""CREATE TABLE IF NOT EXISTS telemetry (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, username TEXT,
-            module TEXT, scenario TEXT, sensor_json TEXT, risk_score REAL,
-            flags_json TEXT
-        )""")
-        con.execute("""CREATE TABLE IF NOT EXISTS scenarios (
-            id TEXT PRIMARY KEY, timestamp TEXT, username TEXT, name TEXT,
-            config_json TEXT, result_json TEXT
-        )""")
-        con.commit()
-
-
-init_db()
-
-
-def log_event(event_type: str, status: str, details: dict | None = None):
-    s = st.session_state
-    with db_connect() as con:
-        con.execute(
-            "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?)",
-            (str(uuid.uuid4()), utc_now(), s.get("username", "guest"),
-             s.get("module", MODULES[0]), s.get("scenario_name", "Manual scenario"),
-             event_type, status, float(s.get("risk_score", 0.0)),
-             json.dumps(details or {}, default=str)),
-        )
-        con.commit()
-
-
-def base_sensor_sample(active: bool, severity: float, noise: float,
-                       oxygen: float, seed: int | None = None) -> dict:
-    """Synthetic signals; deliberately not a real sensor model."""
-    rng = np.random.default_rng(seed)
-    h = severity if active else 0.0
-    return {
-        "CO_ppm": float(np.clip(rng.normal(1.1 + 10.0*h, .30*noise), 0, 100)),
-        "Smoke_pct": float(np.clip(rng.normal(.06 + .72*h, .035*noise), 0, 5)),
-        "Temp_C": float(np.clip(rng.normal(22.0 + 28.0*h, .45*noise), -20, 180)),
-        "O2_pct": float(np.clip(rng.normal(oxygen - 1.0*h, .18*noise), 0, 100)),
-        "CO2_ppm": float(np.clip(rng.normal(500 + 900*h, 22*noise), 0, 12000)),
-        "Pressure_kPa": float(np.clip(rng.normal(101.3 - 2.0*h, .10*noise), 40, 120)),
-        "Humidity_pct": float(np.clip(rng.normal(42 + 4*h, 1.0*noise), 0, 100)),
-    }
-
-
-def apply_sensor_faults(readings: dict, faults: list[str]) -> tuple[dict, list[str]]:
-    """Apply transparent test faults to synthetic sensor channels."""
-    x = dict(readings)
-    notes = []
-    if "Smoke sensor disconnected" in faults:
-        x["Smoke_pct"] = None
-        notes.append("Smoke channel unavailable")
-    if "CO sensor stuck" in faults:
-        x["CO_ppm"] = 1.1
-        notes.append("CO channel frozen at a constant value")
-    if "Temperature sensor drift" in faults:
-        x["Temp_C"] = float(x["Temp_C"] + 12.0)
-        notes.append("Temperature channel has injected +12°C drift")
-    if "Pressure sensor noisy" in faults:
-        x["Pressure_kPa"] = float(np.clip(x["Pressure_kPa"] + 5.0, 40, 120))
-        notes.append("Pressure channel has injected offset")
-    return x, notes
-
-
-def sensor_fusion(x: dict) -> tuple[float, list[str], dict]:
-    """Weighted, explainable rule score. Not trained AI and not a certified fire model."""
-    rules = {
-        "CO elevated": (x.get("CO_ppm") is not None and x["CO_ppm"] >= 8, .22),
-        "Smoke elevated": (x.get("Smoke_pct") is not None and x["Smoke_pct"] >= .35, .27),
-        "Temperature elevated": (x.get("Temp_C") is not None and x["Temp_C"] >= 34, .22),
-        "CO2 elevated": (x.get("CO2_ppm") is not None and x["CO2_ppm"] >= 1100, .12),
-        "Oxygen deviation": (x.get("O2_pct") is not None and x["O2_pct"] <= 19, .08),
-        "Pressure deviation": (x.get("Pressure_kPa") is not None and x["Pressure_kPa"] <= 98, .09),
-    }
-    weights = {name: weight for name, (triggered, weight) in rules.items() if triggered}
-    flags = list(weights)
-    available = sum(v is not None for v in x.values())
-    health = available / max(1, len(x))
-    score = min(1.0, sum(weights.values()))
-    # Missing sensor data is reported separately and cannot be interpreted as safe.
-    if health < 1:
-        flags.append(f"Sensor coverage degraded ({health:.0%} channels available)")
-    return score, flags, {"contributions": weights, "coverage": health}
-
-
-def risk_label(score: float) -> str:
-    if score >= .65:
-        return "HIGH"
-    if score >= .30:
-        return "ELEVATED"
-    return "LOW"
-
-
-def illustrative_physics(material: str, oxygen: float, airflow: float,
-                         hvac_isolated: bool, rack_power_cut: bool) -> dict:
-    """Simple inherited illustrative equation; not validated combustion physics."""
-    row = REF.loc[REF["Fuel_Material"] == material].iloc[0]
-    effective_flow = .2 if hvac_isolated else airflow
-    flow_factor = 1.4 if effective_flow < 2 else 1.0 + effective_flow / 14.0
-    oxygen_factor = (max(1.0, oxygen) / 21.0) ** 1.85
-    power_factor = .35 if rack_power_cut else 1.0
-    spread = float(row["Flame_Spread_mm_s"] * oxygen_factor * flow_factor * power_factor)
-    return {
-        "spread_mm_s": max(0.0, spread),
-        "flux_kw_m2": float(row["Radiative_Flux_kW_m2"] * oxygen_factor),
-        "oxygen_index_margin": float(oxygen - row["Limiting_O2_Index"]),
-    }
-
-
-def strategy_estimate(name: str, x: dict, material: str, oxygen: float,
-                      airflow: float, duration_s: int) -> dict:
-    """Compare configurable virtual strategies using toy-model assumptions only."""
-    settings = {
-        "Monitor only": (False, False, 1.00),
-        "Ventilation isolation": (True, False, .82),
-        "Rack power reduction": (False, True, .72),
-        "Combined virtual response": (True, True, .55),
-    }
-    hvac, power, response_factor = settings[name]
-    p = illustrative_physics(material, oxygen, airflow, hvac, power)
-    severity = min(1.0, max(.05, (x.get("Smoke_pct") or .05) / .8))
-    projected_damage = min(100.0, p["spread_mm_s"] * duration_s * .02 * response_factor)
-    projected_risk = min(1.0, (p["spread_mm_s"] / 35.0) * .55 +
-                         severity * .35 + (0.10 if not hvac else 0.0))
-    return {
-        "Strategy": name,
-        "Virtual HVAC isolation": hvac,
-        "Virtual rack power reduction": power,
-        "Illustrative risk score": round(projected_risk, 3),
-        "Illustrative damage index (%)": round(projected_damage, 2),
-        "Model note": "Toy-model comparison; not an operational recommendation",
-    }
-
-
-def forecast_frame(history: pd.DataFrame, horizon_seconds: int) -> pd.DataFrame:
-    rows = []
-    if len(history) < 5:
-        return pd.DataFrame()
-    recent = history.tail(30).reset_index(drop=True)
-    for col in ["CO_ppm", "Smoke_pct", "Temp_C"]:
-        vals = pd.to_numeric(recent[col], errors="coerce").dropna()
-        if len(vals) < 5:
-            continue
-        xx = np.arange(len(vals))
-        slope, intercept = np.polyfit(xx, vals.to_numpy(), 1)
-        projected = max(0.0, float(intercept + slope * (len(vals)-1 + horizon_seconds)))
-        residual = vals.to_numpy() - (slope*xx + intercept)
-        uncertainty = float(np.std(residual)) if len(residual) > 1 else 0.0
-        rows.append({
-            "Signal": col, "Latest": float(vals.iloc[-1]),
-            "Trend per sample": float(slope),
-            f"Illustrative projection (+{horizon_seconds} samples)": projected,
-            "Residual spread (not calibrated confidence)": uncertainty,
-        })
-    return pd.DataFrame(rows)
-
-
-def persist_telemetry(x: dict, score: float, flags: list[str]):
-    s = st.session_state
-    with db_connect() as con:
-        con.execute(
-            """INSERT INTO telemetry(timestamp,username,module,scenario,sensor_json,risk_score,flags_json)
-               VALUES(?,?,?,?,?,?,?)""",
-            (utc_now(), s.username, s.module, s.scenario_name,
-             json.dumps(x), score, json.dumps(flags)),
-        )
-        con.commit()
-
-
-def load_user_table(table: str, user: str, limit: int = 2000) -> pd.DataFrame:
-    allowed = {"events", "telemetry", "scenarios"}
-    if table not in allowed:
-        raise ValueError("Unknown table")
-    with db_connect() as con:
-        return pd.read_sql_query(
-            f"SELECT * FROM {table} WHERE username=? ORDER BY timestamp DESC LIMIT ?",
-            con, params=(user, limit),
-        )
-
-
-def save_scenario(name: str, config: dict, result: dict):
-    s = st.session_state
-    with db_connect() as con:
-        con.execute(
-            "INSERT INTO scenarios VALUES(?,?,?,?,?,?)",
-            (str(uuid.uuid4()), utc_now(), s.username, name,
-             json.dumps(config, default=str), json.dumps(result, default=str)),
-        )
-        con.commit()
-    log_event("SCENARIO_SAVED", "SAVED", {"name": name})
-
-
-# ---------- Session state ----------
-defaults = {
-    "logged_in": False, "username": "", "module": MODULES[0],
-    "material": MATERIALS[0], "oxygen": 24.5, "airflow": 6.5,
-    "scenario_name": "Baseline habitat", "severity": .0,
-    "hazard_active": False, "hvac_isolated": False, "rack_power_cut": False,
-    "drill_started": None, "drill_last_tick": None, "damage_index": 0.0,
-    "faults": [], "noise": 1.0, "history": [], "last_sample": 0.0,
-    "sensor": {}, "risk_score": 0.0, "flags": [], "live_stream": False,
-    "last_action": "System initialized", "duration": 30,
-}
-for key, value in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
-s = st.session_state
-
-# Demo access only — intentionally no fake OAuth claims.
-if not s.logged_in:
-    _, center, _ = st.columns([1, 1.25, 1])
-    with center:
-        st.title("🛰️ AeroGuard Gateway")
-        st.subheader("Intelligent aerospace hazard research simulator")
-        st.warning("Demo access only. No Google/X authentication or identity verification is performed.")
-        if st.button("Enter AeroGuard Demo", type="primary", use_container_width=True):
-            s.logged_in = True
-            s.username = "demo_operator"
-            log_event("SESSION_START", "DEMO", {"authentication": "demo-only"})
-            st.rerun()
-    st.stop()
-
-# ---------- Sidebar controls ----------
-st.sidebar.title("🛰️ AeroGuard Control Room")
-st.sidebar.caption(f"Demo operator: {s.username}")
-if st.sidebar.button("Log out / switch demo session"):
-    s.logged_in = False
-    s.username = ""
-    st.rerun()
-
-s.module = st.sidebar.selectbox("Habitat module", MODULES, index=MODULES.index(s.module))
-s.material = st.sidebar.selectbox("Reference material", MATERIALS, index=MATERIALS.index(s.material))
-s.oxygen = st.sidebar.slider("Ambient oxygen (%)", 10.0, 50.0, float(s.oxygen), .5)
-s.airflow = st.sidebar.slider("Ventilation velocity (cm/s)", 0.0, 50.0, float(s.airflow), .5)
-s.duration = st.sidebar.select_slider("Scenario duration (seconds)", [10, 20, 30, 45, 60, 90], value=s.duration)
-s.noise = st.sidebar.slider("Synthetic sensor noise", .2, 3.0, float(s.noise), .1)
-s.live_stream = st.sidebar.toggle("Auto-refresh synthetic telemetry", value=s.live_stream)
-st.sidebar.caption("Every control affects simulator state only; no physical hardware is connected.")
-
-cstart, creset = st.sidebar.columns(2)
-if cstart.button("Start timed fire drill", type="primary", use_container_width=True):
-    s.hazard_active = True
-    s.severity = .75
-    s.drill_started = time.monotonic()
-    s.drill_last_tick = s.drill_started
-    s.scenario_name = "Timed fire-drill simulation"
-    s.last_action = "Timed synthetic fire drill started"
-    log_event("DRILL_START", "ACTIVE", {"severity": s.severity, "duration_seconds": s.duration})
-if creset.button("Reset", use_container_width=True):
-    s.hazard_active = False
-    s.severity = 0.0
-    s.drill_started = None
-    s.drill_last_tick = None
-    s.damage_index = 0.0
-    s.hvac_isolated = False
-    s.rack_power_cut = False
-    s.faults = []
-    s.scenario_name = "Baseline habitat"
-    s.last_action = "Simulator reset"
-    log_event("SIMULATOR_RESET", "RESET")
-    st.rerun()
-
-# Scenario selection to reproduce known cases
-scenario_presets = {
-    "Baseline habitat": (False, 0.0),
-    "Slow thermal rise": (True, .35),
-    "Rapid smoke event": (True, .85),
-    "High-temperature equipment fault": (True, .70),
-}
-preset = st.sidebar.selectbox("Scenario preset", list(scenario_presets), index=0)
-if st.sidebar.button("Load selected scenario"):
-    active, sev = scenario_presets[preset]
-    s.hazard_active, s.severity = active, sev
-    s.drill_started = time.monotonic() if active else None
-    s.drill_last_tick = s.drill_started
-    s.scenario_name = preset
-    s.last_action = f"Loaded scenario: {preset}"
-    s.hvac_isolated = False
-    s.rack_power_cut = False
-    log_event("PRESET_LOADED", "LOADED", {"preset": preset, "severity": sev})
-    st.rerun()
-
-# Generate one sample on each normal rerun, or once per second in live mode.
-now = time.monotonic()
-if not s.sensor or now - s.last_sample >= 1.0:
-    raw = base_sensor_sample(s.hazard_active, s.severity, s.noise, s.oxygen)
-    x, fault_notes = apply_sensor_faults(raw, s.faults)
-    score, flags, fusion = sensor_fusion(x)
-    if fault_notes:
-        flags.extend(fault_notes)
-    s.sensor, s.risk_score, s.flags = x, score, flags
-    s.last_sample = now
-    row = {"timestamp": utc_now(), **x, "risk_score": score, "scenario": s.scenario_name}
-    s.history.append(row)
-    s.history = s.history[-600:]
-    persist_telemetry(x, score, flags)
-else:
-    x = s.sensor
-    score, flags, fusion = sensor_fusion(x)
-    flags = list(s.flags)
-
-# Time-based drill progression. Damage is illustrative and advances with elapsed time,
-# not with the number of Streamlit reruns.
-drill_remaining = 0
-if s.hazard_active and s.drill_started is not None:
-    elapsed = max(0.0, time.monotonic() - s.drill_started)
-    drill_remaining = max(0, math.ceil(s.duration - elapsed))
-    tick_now = time.monotonic()
-    dt = max(0.0, min(2.0, tick_now - (s.drill_last_tick or tick_now)))
-    toy = illustrative_physics(s.material, s.oxygen, s.airflow,
-                               s.hvac_isolated, s.rack_power_cut)
-    s.damage_index = min(100.0, s.damage_index + toy["spread_mm_s"] * dt * .02)
-    s.drill_last_tick = tick_now
-    if elapsed >= s.duration:
-        s.hazard_active = False
-        s.drill_started = None
-        log_event("DRILL_COMPLETE", "COMPLETED", {"damage_index": round(s.damage_index, 2)})
-
-# Header / KPIs
-st.title("🛰️ AeroGuard v6.0")
-st.caption("Hazard intelligence · Digital habitat twin · Resilience laboratory · Scenario benchmarking")
-banner = ("ag-alarm" if score >= .65 else "ag-warn" if score >= .30 else "ag-ok")
-banner_text = ("HIGH SIMULATED RISK — investigate the test scenario" if score >= .65 else
-               "ELEVATED SIMULATED RISK — review contributing channels" if score >= .30 else
-               "SIMULATOR NOMINAL — no configured high-risk rule triggered")
-st.markdown(f'<div class="ag-banner {banner}">{banner_text}</div>', unsafe_allow_html=True)
-
-k = st.columns(6)
-k[0].metric("Risk score", f"{score:.0%}", risk_label(score))
-k[1].metric("CO", "Unavailable" if x["CO_ppm"] is None else f"{x['CO_ppm']:.1f} ppm")
-k[2].metric("Smoke", "Unavailable" if x["Smoke_pct"] is None else f"{x['Smoke_pct']:.3f}%")
-k[3].metric("Temperature", f"{x['Temp_C']:.1f} °C")
-k[4].metric("Sensor coverage", f"{fusion['coverage']:.0%}")
-k[5].metric("Drill / damage", f"{drill_remaining}s left" if s.hazard_active else f"{s.damage_index:.2f}% damage")
-st.warning(
-    "Research prototype only: synthetic signals, illustrative equations and virtual controls. "
-    "No output is a fire-safety instruction, validated prediction, or spacecraft operating limit."
-)
-
-tabs = st.tabs([
-    "Overview & Digital Twin", "Sensor Intelligence", "Prediction",
-    "Response Comparison", "Fault & Resilience Lab", "Scenario Replay",
-    "Benchmark Center", "Audit & Data",
-])
-
-# ---------- 1. Overview / digital twin ----------
-with tabs[0]:
-    left, right = st.columns([1.1, 1])
+# ---------- DASHBOARD ----------
+if page == "Mission Dashboard":
+    st.markdown("## Research Operations Overview")
+    st.caption("A unified workspace for microgravity combustion research and aerospace environment exploration.")
+    c1,c2,c3,c4=st.columns(4)
+    with c1: kpi("PRIMARY INVESTIGATION","FLEX","NASA microgravity combustion")
+    with c2: kpi("ANALYSIS ENGINE","PSO / SI","Optimization workspace")
+    with c3: kpi("ASCENT ENVELOPE","0–90 kft","Atmospheric model")
+    with c4: kpi("REFERENCE VEHICLE","SLS BLOCK 1","Published configuration reference")
+    left, right = st.columns([1.65,1])
     with left:
-        st.subheader("Habitat zone map")
-        st.caption("Conceptual zone layout. The highlighted zone is a scenario label, not a physical location estimate.")
-        zones = pd.DataFrame({
-            "zone": ["Crew quarters", "Avionics rack", "Airlock", "Lab workbench", "Utility bay"],
-            "x": [1, 3, 5, 1, 3], "y": [2, 2, 2, 0, 0],
-            "risk": [score*.25, score, score*.15, score*.45, score*.30],
-        })
-        fig = px.scatter(
-            zones, x="x", y="y", color="risk", size="risk",
-            text="zone", color_continuous_scale="Turbo",
-            range_color=(0, 1), title="Illustrative habitat risk zoning",
-        )
-        fig.update_traces(textposition="top center", marker=dict(sizemin=14))
-        fig.update_layout(template="plotly_dark", height=360,
-                          xaxis=dict(visible=False), yaxis=dict(visible=False))
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("The current prototype uses a conceptual zone map, not CAD geometry or validated smoke-flow simulation.")
+        st.markdown('<div class="ag-panel">',unsafe_allow_html=True)
+        panel_title("COMBUSTION RESEARCH VISUALIZATION","MICROGRAVITY")
+        # Original conceptual flame visualization, not an experimental photograph.
+        theta=np.linspace(0,2*np.pi,220)
+        r=1.0+0.12*np.sin(5*theta)+0.05*np.cos(9*theta)
+        fig=go.Figure()
+        fig.add_trace(go.Scatter(x=r*np.cos(theta),y=r*np.sin(theta),mode="lines",
+            line=dict(color="#22d3ee",width=3),fill="toself",fillcolor="rgba(34,211,238,.12)",name="Conceptual flame boundary"))
+        rng=np.random.default_rng(4)
+        x=rng.normal(0,.42,220); y=rng.normal(0,.42,220)
+        fig.add_trace(go.Scatter(x=x,y=y,mode="markers",marker=dict(size=2,color="#ff9b54",opacity=.55),name="Illustrative particles"))
+        fig.update_layout(xaxis=dict(visible=False,scaleanchor="y",range=[-1.6,1.6]),
+                          yaxis=dict(visible=False,range=[-1.6,1.6]),showlegend=False)
+        dark_fig(fig,390)
+        st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
+        st.caption("Conceptual visualization only — not a NASA flame image or measured flame geometry.")
+        st.markdown('</div>',unsafe_allow_html=True)
     with right:
-        st.subheader("Current habitat state")
-        st.metric("Virtual HVAC", "ISOLATED" if s.hvac_isolated else "ACTIVE")
-        st.metric("Virtual rack power", "REDUCED" if s.rack_power_cut else "NORMAL")
-        st.metric("Injected sensor faults", len(s.faults))
-        st.write("**Selected module:**", s.module)
-        st.write("**Material reference:**", s.material)
-        st.write("**Last simulator action:**", s.last_action)
-        p = illustrative_physics(s.material, s.oxygen, s.airflow,
-                                 s.hvac_isolated, s.rack_power_cut)
-        st.write(f"Toy-model spread index: **{p['spread_mm_s']:.2f}**")
-        st.write(f"Toy-model radiative index: **{p['flux_kw_m2']:.2f}**")
-    st.subheader("3D habitat concept")
-    fig3 = go.Figure()
-    # Simple cuboid outline + equipment and crew markers.
-    corners = [(0,0,0),(10,0,0),(10,5,0),(0,5,0),(0,0,3),(10,0,3),(10,5,3),(0,5,3)]
-    edges = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
-    for a, b in edges:
-        fig3.add_trace(go.Scatter3d(
-            x=[corners[a][0], corners[b][0]], y=[corners[a][1], corners[b][1]],
-            z=[corners[a][2], corners[b][2]], mode="lines",
-            line=dict(color="#7c93b3", width=5), showlegend=False,
-        ))
-    fig3.add_trace(go.Scatter3d(
-        x=[7.5, 2.0, 5.0], y=[2.5, 2.5, 1.0], z=[1.2, 1.0, 2.0],
-        mode="markers+text", text=["Avionics rack", "Crew zone", "Airlock"],
-        textposition="top center", marker=dict(size=[12, 8, 7], color=["red", "cyan", "orange"]),
-        name="Habitat systems",
-    ))
-    fig3.update_layout(template="plotly_dark", height=430,
-                       scene=dict(aspectmode="data", xaxis_title="X", yaxis_title="Y", zaxis_title="Z"))
-    st.plotly_chart(fig3, use_container_width=True)
+        st.markdown('<div class="ag-panel">',unsafe_allow_html=True)
+        panel_title("RESEARCH SYSTEM STATUS")
+        for name,status,clr in [("Dataset connector","AWAITING VERIFIED DATA","#e9b44c"),
+                                ("Combustion analytics","READY FOR DATA","#22d3ee"),
+                                ("Swarm optimizer","PROTOTYPE","#22d3ee"),
+                                ("Ascent atmosphere model","AVAILABLE","#19d3b0"),
+                                ("NASA source registry","REFERENCE MODE","#e9b44c")]:
+            st.markdown(f'<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #173653"><span style="font-size:.8rem">{name}</span><span style="font-size:.65rem;color:{clr};font-weight:700">{status}</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="ag-rule"></div><div class="ag-muted">No live spacecraft connection. No live NASA telemetry. Research and simulation workspace.</div>',unsafe_allow_html=True)
+        st.markdown('</div>',unsafe_allow_html=True)
+    b1,b2,b3=st.columns([1.15,1.15,1])
+    with b1:
+        st.markdown('<div class="ag-panel">',unsafe_allow_html=True); panel_title("RESEARCH PIPELINE")
+        st.markdown("**01**  Dataset verification  <span style='color:#e9b44c'>PENDING</span><br>**02**  Feature extraction  <span style='color:#22d3ee'>READY</span><br>**03**  SI optimization  <span style='color:#22d3ee'>PROTOTYPE</span><br>**04**  Evidence review  <span style='color:#8ba7c2'>PLANNED</span>",unsafe_allow_html=True)
+        st.markdown('</div>',unsafe_allow_html=True)
+    with b2:
+        st.markdown('<div class="ag-panel">',unsafe_allow_html=True); panel_title("ASCENT ENVIRONMENT")
+        alts=np.linspace(0,27432,50); vals=[isa_atmosphere(x) for x in alts]
+        f=go.Figure(go.Scatter(x=alts/1000,y=[v[0]-273.15 for v in vals],mode="lines",line=dict(color="#22d3ee",width=2),name="Air temperature"))
+        f.update_layout(xaxis_title="Altitude (km)",yaxis_title="Temperature (°C)")
+        st.plotly_chart(dark_fig(f,190),use_container_width=True,config={"displayModeBar":False})
+        st.markdown('</div>',unsafe_allow_html=True)
+    with b3:
+        st.markdown('<div class="ag-panel">',unsafe_allow_html=True); panel_title("REFERENCE VEHICLE")
+        st.markdown("**NASA SLS · Block 1**<br><span class='ag-muted'>Human exploration launch vehicle</span><div class='ag-rule'></div><b>322 ft</b> <span class='ag-muted'>approx. height</span><br><b>8.8 million lbf</b> <span class='ag-muted'>approx. liftoff thrust</span><div class='ag-rule'></div><span class='ag-muted'>Reference specifications only. Not live flight telemetry.</span>",unsafe_allow_html=True)
+        st.markdown('</div>',unsafe_allow_html=True)
 
-# ---------- 2. Sensor fusion ----------
-with tabs[1]:
-    st.subheader("Multi-sensor intelligence")
-    st.write("A weighted, explainable rule engine combines available channels. It is not a trained AI model.")
-    contributions = fusion["contributions"]
-    if contributions:
-        st.dataframe(pd.DataFrame(
-            [{"Triggered rule": name, "Score contribution": weight} for name, weight in contributions.items()]
-        ), use_container_width=True, hide_index=True)
-    else:
-        st.success("No configured hazard threshold is currently triggered.")
-    if flags:
-        for flag in flags:
-            st.warning(flag)
-    hist = pd.DataFrame(s.history)
-    if not hist.empty:
-        available_signals = [c for c in SIGNALS if c in hist.columns and hist[c].notna().any()]
-        selected = st.multiselect("Telemetry channels", available_signals,
-                                  default=[c for c in ["CO_ppm", "Smoke_pct", "Temp_C"] if c in available_signals])
-        if selected:
-            st.line_chart(hist.set_index("timestamp")[selected], height=320)
-        st.dataframe(hist.tail(30), use_container_width=True, hide_index=True)
-    st.subheader("Sensor health diagnostics")
-    health_rows = []
-    for signal in SIGNALS:
-        value = x.get(signal)
-        health_rows.append({
-            "Channel": signal,
-            "Current value": "MISSING" if value is None else value,
-            "Status": "UNAVAILABLE" if value is None else "SIMULATED / AVAILABLE",
-        })
-    st.dataframe(pd.DataFrame(health_rows), use_container_width=True, hide_index=True)
+# ---------- COMBUSTION EXPLORER ----------
+elif page == "Combustion Explorer":
+    st.markdown("## Microgravity Combustion Explorer")
+    st.caption("Inspect, filter and compare experimental records. Upload a verified NASA or mentor-provided dataset to replace the clearly labelled demonstration records.")
+    uploaded=st.file_uploader("Upload combustion dataset (CSV)",type=["csv"])
+    if uploaded:
+        try: df=pd.read_csv(uploaded); source="USER-UPLOADED FILE"
+        except Exception as e: st.error(f"Could not read CSV: {e}"); df=demo_combustion(); source="DEMO DATA"
+    else: df=demo_combustion(); source="ILLUSTRATIVE DEMO DATA"
+    st.markdown(f'<span class="ag-chip">{source}</span>',unsafe_allow_html=True)
+    st.warning("The built-in rows are synthetic interface demonstration data. They are not NASA experimental measurements.")
+    search=st.text_input("Search experiment ID, fuel or outcome")
+    if search: df=df[df.astype(str).apply(lambda col: col.str.contains(search,case=False,na=False)).any(axis=1)]
+    c1,c2,c3=st.columns(3)
+    c1.metric("Records displayed",len(df))
+    c2.metric("Fuel/material categories",df["Fuel"].nunique() if "Fuel" in df else "—")
+    c3.metric("Columns",len(df.columns))
+    st.dataframe(df,use_container_width=True,hide_index=True)
+    if len(df) and "Oxygen_pct" in df and "Flame_duration_s" in df:
+        f=px.scatter(df,x="Oxygen_pct",y="Flame_duration_s",color="Outcome" if "Outcome" in df else None,
+                     hover_data=list(df.columns),title="Oxygen concentration vs flame duration")
+        st.plotly_chart(dark_fig(f,340),use_container_width=True)
+    st.download_button("Export displayed records",df.to_csv(index=False).encode(), "aeroguard_combustion_records.csv","text/csv")
 
-# ---------- 3. Prediction ----------
-with tabs[2]:
-    st.subheader("Short-horizon trend projection")
-    horizon = st.slider("Projection horizon (future samples)", 1, 30, 8)
-    forecast = forecast_frame(pd.DataFrame(s.history), horizon)
-    if forecast.empty:
-        st.info("At least five usable samples per channel are needed. Enable auto-refresh or interact with the simulator to collect samples.")
-    else:
-        st.dataframe(forecast, use_container_width=True, hide_index=True)
-        st.caption("Linear extrapolation only. Residual spread is descriptive uncertainty, not a calibrated probability or confidence interval.")
-    st.subheader("What the prediction does — and does not — mean")
-    st.markdown("""
-    - Fits a straight line to recent synthetic readings.
-    - Extrapolates the line over a user-selected number of samples.
-    - Reports residual spread to show how scattered recent points are around the fitted line.
-    - Does **not** predict real fire development, crew exposure, or safe response time.
-    """)
+# ---------- SWARM LAB ----------
+elif page == "Swarm Intelligence Lab":
+    st.markdown("## Swarm Intelligence Laboratory")
+    st.caption("A transparent optimization workbench. The current demonstration objective is mathematical, not a validated combustion law.")
+    st.info("Next research integration: define a fitness function against verified FLEX measurements or a validated combustion model, then test on held-out experiments.")
+    c1,c2,c3=st.columns(3)
+    with c1: n=st.slider("Particle count",10,100,30,5)
+    with c2: iters=st.slider("Iterations",20,300,100,10)
+    with c3: seed=st.number_input("Random seed",0,9999,42)
+    if st.button("Run demonstration PSO",type="primary"):
+        rng=np.random.default_rng(int(seed)); pos=rng.uniform(-5,5,(n,2)); vel=np.zeros_like(pos)
+        pbest=pos.copy(); fit=lambda z: np.sum(z*z,axis=1)
+        pscore=fit(pos); gbest=pbest[np.argmin(pscore)].copy(); history=[]
+        for _ in range(iters):
+            r1=rng.random((n,2)); r2=rng.random((n,2))
+            vel=.72*vel+1.45*r1*(pbest-pos)+1.45*r2*(gbest-pos)
+            pos=np.clip(pos+vel,-5,5); score=fit(pos)
+            better=score<pscore; pbest[better]=pos[better]; pscore[better]=score[better]
+            gbest=pbest[np.argmin(pscore)].copy(); history.append(float(np.min(pscore)))
+        st.session_state["pso_history"]=history; st.session_state["pso_best"]=gbest
+    if "pso_history" in st.session_state:
+        st.metric("Best objective found",f"{st.session_state['pso_history'][-1]:.6f}")
+        f=go.Figure(go.Scatter(y=st.session_state["pso_history"],mode="lines",line=dict(color="#22d3ee",width=3),name="Best objective"))
+        f.update_layout(xaxis_title="Iteration",yaxis_title="Objective value")
+        st.plotly_chart(dark_fig(f,330),use_container_width=True)
+        st.write("Best point:",np.round(st.session_state["pso_best"],5))
+        st.caption("This validates the optimizer mechanics on a simple mathematical test function only. It is not a combustion discovery.")
+    else: st.markdown('<div class="ag-panel ag-muted">Run the optimizer to view convergence diagnostics.</div>',unsafe_allow_html=True)
 
-# ---------- 4. Response comparison ----------
-with tabs[3]:
-    st.subheader("Virtual response strategy comparison")
-    st.info("This is a decision-support experiment using illustrative equations. It does not select or execute real emergency actions.")
-    compare_duration = st.slider("Comparison duration (seconds)", 10, 180, 45)
-    strategy_names = ["Monitor only", "Ventilation isolation", "Rack power reduction", "Combined virtual response"]
-    results = pd.DataFrame([
-        strategy_estimate(name, x, s.material, s.oxygen, s.airflow, compare_duration)
-        for name in strategy_names
-    ])
-    st.dataframe(results, use_container_width=True, hide_index=True)
-    chart = px.bar(results, x="Strategy", y="Illustrative damage index (%)",
-                   color="Strategy", title="Toy-model strategy comparison")
-    chart.update_layout(template="plotly_dark", showlegend=False)
-    st.plotly_chart(chart, use_container_width=True)
-    st.subheader("Virtual interlocks (simulator only)")
-    vc1, vc2, vc3 = st.columns(3)
-    with vc1:
-        if st.button("Toggle virtual HVAC isolation"):
-            s.hvac_isolated = not s.hvac_isolated
-            s.last_action = "Virtual HVAC " + ("isolated" if s.hvac_isolated else "restored")
-            log_event("HVAC_OVERRIDE", "ISOLATED" if s.hvac_isolated else "RESTORED")
-            st.rerun()
-        st.metric("HVAC state", "ISOLATED" if s.hvac_isolated else "ACTIVE")
-    with vc2:
-        if st.button("Toggle virtual rack power reduction"):
-            s.rack_power_cut = not s.rack_power_cut
-            s.last_action = "Virtual rack power " + ("reduced" if s.rack_power_cut else "restored")
-            log_event("RACK_POWER_OVERRIDE", "REDUCED" if s.rack_power_cut else "RESTORED")
-            st.rerun()
-        st.metric("Rack power", "REDUCED" if s.rack_power_cut else "NORMAL")
-    with vc3:
-        if st.button("Trigger virtual water-mist event", disabled=not s.hazard_active):
-            s.hazard_active = False
-            s.drill_started = None
-            s.last_action = "Virtual water-mist event recorded"
-            log_event("VIRTUAL_SUPPRESSION", "SIMULATED_EVENT", {"damage_index_retained": s.damage_index})
-            st.rerun()
-        st.metric("Virtual suppressor", "READY")
+# ---------- FIRE SAFETY ----------
+elif page == "Fire Safety Insights":
+    st.markdown("## Fire Safety Intelligence")
+    st.caption("Evidence-linked interpretation layer — findings must be traceable to experimental records.")
+    st.warning("No verified combustion dataset is connected yet. The examples below are research questions, not generated scientific conclusions.")
+    items=[
+        ("Flame persistence","Which measured conditions are associated with longer flame duration?","Requires duration labels and experimental conditions."),
+        ("Extinction behaviour","Which combinations of oxygen and suppressant conditions are associated with extinction?","Requires suppressant composition and extinction outcomes."),
+        ("Cool-flame observations","Are there post-visible-flame reactions documented in the selected experiment?","Requires experiment-specific diagnostics and source papers."),
+        ("Material comparison","How do fuel/material classes differ under comparable conditions?","Requires comparable test conditions and uncertainty estimates.")]
+    for title,q,need in items:
+        with st.expander(title,expanded=True):
+            st.write(q); st.caption("Evidence required: "+need)
+    st.markdown("**Required insight record format**")
+    st.dataframe(pd.DataFrame([
+        {"Field":"Finding","Purpose":"One concise evidence-based statement"},
+        {"Field":"Supporting experiments","Purpose":"Record identifiers and source links"},
+        {"Field":"Method","Purpose":"Statistical test, model or SI method"},
+        {"Field":"Uncertainty","Purpose":"Confidence interval or known limitations"},
+        {"Field":"Safety relevance","Purpose":"Potential implication, not operational instruction"}]),use_container_width=True,hide_index=True)
 
-    chosen = st.selectbox("Record a virtual operator decision", strategy_names)
-    reason = st.text_area("Decision rationale / experiment notes", placeholder="Explain why this strategy is being tested...")
-    if st.button("Record decision in audit trail"):
-        log_event("VIRTUAL_STRATEGY_SELECTED", "RECORDED",
-                  {"strategy": chosen, "rationale": reason, "comparison": results.to_dict("records")})
-        s.last_action = f"Recorded strategy experiment: {chosen}"
-        st.success("Experiment decision recorded in the local audit database.")
+# ---------- ASCENT ----------
+elif page == "Ascent Environment":
+    st.markdown("## Aerospace Ascent Environment Explorer")
+    st.caption("Atmospheric reference calculator for 0–90,000 ft. This is not a complete SLS flight trajectory.")
+    altitude_ft=st.slider("Select geopotential altitude",0,90000,40000,1000)
+    T,P,rho,a=isa_atmosphere(altitude_ft*0.3048)
+    c1,c2,c3,c4=st.columns(4)
+    with c1: kpi("AIR TEMPERATURE",f"{T-273.15:.1f} °C",f"{T:.1f} K")
+    with c2: kpi("PRESSURE",f"{P/1000:.2f} kPa",f"{P:.0f} Pa")
+    with c3: kpi("AIR DENSITY",f"{rho:.4f} kg/m³","Standard atmosphere estimate")
+    with c4: kpi("SPEED OF SOUND",f"{a:.1f} m/s","Local atmospheric value")
+    alts=np.linspace(0,90000,181); rows=[isa_atmosphere(x*.3048) for x in alts]
+    f=go.Figure()
+    f.add_trace(go.Scatter(x=alts,y=[v[0]-273.15 for v in rows],name="Temperature (°C)",line=dict(color="#22d3ee",width=3)))
+    f.update_layout(xaxis_title="Altitude (ft)",yaxis_title="Temperature (°C)",title="Standard-atmosphere temperature profile")
+    st.plotly_chart(dark_fig(f,330),use_container_width=True)
+    f2=go.Figure()
+    f2.add_trace(go.Scatter(x=alts,y=[v[1]/1000 for v in rows],name="Pressure (kPa)",line=dict(color="#19d3b0",width=3)))
+    f2.add_trace(go.Scatter(x=alts,y=[v[2] for v in rows],name="Density (kg/m³)",line=dict(color="#e9b44c",width=3),yaxis="y2"))
+    f2.update_layout(title="Pressure and density vs altitude",xaxis_title="Altitude (ft)",yaxis=dict(title="Pressure (kPa)"),yaxis2=dict(title="Density (kg/m³)",overlaying="y",side="right"))
+    st.plotly_chart(dark_fig(f2,300),use_container_width=True)
+    st.caption("Model note: simplified layered standard-atmosphere calculation for educational exploration. It excludes weather, latitude/season variations and upper-atmosphere composition effects.")
 
-# ---------- 5. Fault injection ----------
-with tabs[4]:
-    st.subheader("Failure-injection and resilience laboratory")
-    st.write("Intentionally degrade synthetic channels to test whether the interface reports unreliable input.")
-    fault_options = [
-        "Smoke sensor disconnected", "CO sensor stuck",
-        "Temperature sensor drift", "Pressure sensor noisy",
-    ]
-    new_faults = st.multiselect("Inject simulated sensor faults", fault_options, default=s.faults)
-    if st.button("Apply fault configuration"):
-        s.faults = new_faults
-        log_event("SENSOR_FAULT_CONFIGURATION", "UPDATED", {"faults": new_faults})
-        s.last_sample = 0
-        st.rerun()
-    if s.faults:
-        st.error("Fault injection active: do not interpret missing or degraded channels as evidence of safety.")
-        for item in s.faults:
-            st.write("•", item)
-    else:
-        st.success("No injected sensor faults.")
-    st.subheader("Resilience test checklist")
-    st.markdown("""
-    1. Record a baseline with no injected faults.
-    2. Disconnect the smoke channel and verify the coverage warning.
-    3. Freeze the CO channel and observe whether other channels still contribute.
-    4. Add temperature drift and note the change in the rule score.
-    5. Clear all faults and compare the baseline again.
-    """)
-    if st.button("Log current resilience test result"):
-        log_event("RESILIENCE_TEST", "OBSERVATION_RECORDED",
-                  {"faults": s.faults, "coverage": fusion["coverage"],
-                   "risk_score": score, "flags": flags})
-        st.success("Resilience observation saved.")
+# ---------- AEROTHERMAL ----------
+elif page == "Aerothermal Analysis":
+    st.markdown("## Vehicle Aerodynamics & Thermal Analysis")
+    st.caption("Parameterized research calculator. Inputs are user-selected assumptions, not measured SLS flight telemetry.")
+    c1,c2,c3=st.columns(3)
+    with c1: alt=st.slider("Altitude (ft)",0,90000,40000,1000,key="thermal_alt")
+    with c2: velocity=st.number_input("Vehicle speed (m/s)",min_value=0.0,max_value=8000.0,value=1200.0,step=50.0)
+    with c3: cd=st.number_input("Drag coefficient Cd",min_value=0.05,max_value=2.0,value=0.5,step=0.05)
+    area=st.number_input("Reference area (m²)",min_value=0.1,max_value=500.0,value=10.0)
+    nose=st.number_input("Nose radius (m) for heating estimate",min_value=0.05,max_value=10.0,value=1.5)
+    T,P,rho,a=isa_atmosphere(alt*.3048)
+    q=.5*rho*velocity**2
+    drag=q*cd*area
+    mach=velocity/a
+    k_sg=1.83e-4 # illustrative SI coefficient convention; validity must be checked for selected gas/model
+    qdot=k_sg*math.sqrt(max(rho,0)/nose)*velocity**3
+    m1,m2,m3,m4=st.columns(4)
+    with m1: kpi("MACH NUMBER",f"{mach:.2f}","Speed / local sound speed")
+    with m2: kpi("DYNAMIC PRESSURE",f"{q/1000:.2f} kPa","0.5 × density × relative speed²")
+    with m3: kpi("ESTIMATED DRAG",f"{drag/1000:.1f} kN","Assumed Cd and area")
+    with m4: kpi("HEATING INDICATOR",f"{qdot/1000:.2f} kW/m²","Correlation estimate; verify validity")
+    st.warning("This simplified heating estimate is not an SLS-certified aerothermal prediction. The coefficient, gas model, geometry, flow regime and correlation validity must be verified before research use. Atmospheric temperature is not vehicle skin temperature.")
+    st.markdown("**Calculation trace**")
+    st.code(f"Altitude = {alt:,} ft\nAir density = {rho:.6f} kg/m³\nRelative speed assumed = {velocity:.1f} m/s\nDynamic pressure = 0.5 × {rho:.6f} × {velocity:.1f}² = {q:.2f} Pa\nDrag = q × Cd × area = {drag:.2f} N")
+    st.caption("Wind is not yet included: enter air-relative velocity, not ground-relative velocity. A validated flight model must calculate relative airflow from wind and vehicle motion.")
 
-# ---------- 6. Scenario replay / save ----------
-with tabs[5]:
-    st.subheader("Scenario laboratory")
-    st.write("Save a reproducible snapshot of the current synthetic test configuration and outputs.")
-    scenario_label = st.text_input("Scenario name", value=s.scenario_name)
-    if st.button("Save current scenario snapshot", type="primary"):
-        config = {
-            "module": s.module, "material": s.material, "oxygen": s.oxygen,
-            "airflow": s.airflow, "scenario": s.scenario_name,
-            "hazard_active": s.hazard_active, "severity": s.severity,
-            "faults": s.faults, "hvac_isolated": s.hvac_isolated,
-            "rack_power_cut": s.rack_power_cut,
-        }
-        result = {"sensor": x, "risk_score": score, "flags": flags}
-        save_scenario(scenario_label, config, result)
-        st.success("Scenario snapshot saved to the local SQLite database.")
-    saved = load_user_table("scenarios", s.username)
-    if saved.empty:
-        st.info("No saved scenarios yet.")
-    else:
-        st.dataframe(saved[["timestamp", "name", "config_json", "result_json"]],
-                     use_container_width=True, hide_index=True)
-        selected_id = st.selectbox("Select saved scenario ID", saved["id"].tolist())
-        if st.button("Load selected scenario configuration"):
-            row = saved.loc[saved["id"] == selected_id].iloc[0]
-            cfg = json.loads(row["config_json"])
-            s.module = cfg.get("module", s.module)
-            s.material = cfg.get("material", s.material)
-            s.oxygen = cfg.get("oxygen", s.oxygen)
-            s.airflow = cfg.get("airflow", s.airflow)
-            s.scenario_name = cfg.get("scenario", row["name"])
-            s.hazard_active = cfg.get("hazard_active", False)
-            s.severity = cfg.get("severity", 0.0)
-            s.faults = cfg.get("faults", [])
-            s.hvac_isolated = cfg.get("hvac_isolated", False)
-            s.rack_power_cut = cfg.get("rack_power_cut", False)
-            s.last_sample = 0
-            log_event("SCENARIO_REPLAYED", "LOADED", {"scenario_id": selected_id})
-            st.rerun()
+# ---------- LIBRARY ----------
+elif page == "Research Library":
+    st.markdown("## Research Library & Provenance")
+    st.caption("Register source documents and record which models support each calculation.")
+    refs=pd.DataFrame([
+        ["NASA Physical Sciences Informatics (PSI)","Dataset repository","Combustion investigation records","To be queried and verified"],
+        ["FLEX investigation","Microgravity combustion","Flame extinction and suppressant research","Dataset availability to verify"],
+        ["U.S. Standard Atmosphere 1976","Atmospheric reference","Temperature, pressure and density profiles","Reference model"],
+        ["NASA SLS Block 1 reference guide","Vehicle specifications","Vehicle configuration and propulsion reference","Reference document"],
+        ["NASA Artemis mission press kit","Mission milestones","Published ascent event timeline","Reference document"],
+    ],columns=["Source","Type","AeroGuard use","Integration status"])
+    st.dataframe(refs,use_container_width=True,hide_index=True)
+    st.info("Before presenting numerical combustion findings, attach the exact source dataset and document version. Do not treat inherited sample rows as NASA data.")
+    st.download_button("Download source register CSV",refs.to_csv(index=False).encode(),"aeroguard_source_register.csv","text/csv")
 
-# ---------- 7. Benchmark center ----------
-with tabs[6]:
-    st.subheader("Repeatable benchmark center")
-    st.write("Run a fixed suite of synthetic test cases and compare the rule-based detector with a simple single-channel baseline.")
-    benchmark_cases = [
-        ("Normal baseline", False, 0.0),
-        ("Slow thermal rise", True, .30),
-        ("Moderate mixed signature", True, .55),
-        ("Rapid mixed signature", True, .90),
-        ("Low-severity event", True, .20),
-    ]
-    if st.button("Run benchmark suite", type="primary"):
-        rows = []
-        for case_name, active, sev in benchmark_cases:
-            sample = base_sensor_sample(active, sev, 0.0, s.oxygen, seed=100 + len(rows))
-            fused, fused_flags, _ = sensor_fusion(sample)
-            baseline = 1 if sample["Smoke_pct"] >= .35 else 0
-            fused_detect = 1 if fused >= .30 else 0
-            expected = 1 if active and sev >= .50 else 0
-            rows.append({
-                "Scenario": case_name, "Expected positive (test label)": expected,
-                "Fusion detector positive": fused_detect,
-                "Smoke-only baseline positive": baseline,
-                "Fusion score": round(fused, 3),
-                "Fusion flags": "; ".join(fused_flags) or "None",
-            })
-        bench = pd.DataFrame(rows)
-        st.session_state["last_benchmark"] = bench
-        log_event("BENCHMARK_RUN", "COMPLETED", {"rows": rows})
-    bench = st.session_state.get("last_benchmark")
-    if bench is not None:
-        st.dataframe(bench, use_container_width=True, hide_index=True)
-        st.caption("Small synthetic demonstration suite only. Labels and results are not a validated dataset or proof of field performance.")
-        st.download_button("Download benchmark CSV", bench.to_csv(index=False).encode(),
-                           "aeroguard_v6_benchmark.csv", "text/csv")
-        # Accuracy-like metrics are explicitly limited to this tiny artificial suite.
-        y = bench["Expected positive (test label)"].to_numpy()
-        pred = bench["Fusion detector positive"].to_numpy()
-        tp = int(((y == 1) & (pred == 1)).sum())
-        tn = int(((y == 0) & (pred == 0)).sum())
-        fp = int(((y == 0) & (pred == 1)).sum())
-        fn = int(((y == 1) & (pred == 0)).sum())
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("TP", tp); m2.metric("TN", tn); m3.metric("FP", fp); m4.metric("FN", fn)
-        st.caption("These counts describe only the generated demo cases. Do not present them as real-world detector accuracy.")
-
-# ---------- 8. Audit / data ----------
-with tabs[7]:
-    st.subheader("Persistent audit trail")
-    events = load_user_table("events", s.username)
-    telemetry = load_user_table("telemetry", s.username)
-    scenarios = load_user_table("scenarios", s.username)
-    a, b, c = st.columns(3)
-    a.metric("Audit events", len(events))
-    b.metric("Telemetry rows", len(telemetry))
-    c.metric("Saved scenarios", len(scenarios))
-    if not events.empty:
-        st.dataframe(events, use_container_width=True, hide_index=True)
-        st.download_button("Export events CSV", events.to_csv(index=False).encode(),
-                           "aeroguard_v6_events.csv", "text/csv")
-        st.download_button("Export events JSON", events.to_json(orient="records", indent=2).encode(),
-                           "aeroguard_v6_events.json", "application/json")
-    if not telemetry.empty:
-        st.download_button("Export telemetry CSV", telemetry.to_csv(index=False).encode(),
-                           "aeroguard_v6_telemetry.csv", "text/csv")
-    st.write(f"**Local database:** `{DB_PATH.resolve()}`")
-    st.write(f"**Last action:** {s.last_action}")
-    st.subheader("Preserved app reference dataset")
-    st.caption("Inherited sample values; not independently verified NASA measurements or certified operating limits.")
-    st.dataframe(REF, use_container_width=True, hide_index=True)
-    st.download_button("Export reference table CSV", REF.to_csv(index=False).encode(),
-                       "aeroguard_reference_sample_data.csv", "text/csv")
-    if st.button("Delete my local demo records", type="secondary"):
-        st.session_state["confirm_delete_records"] = True
-    if st.session_state.get("confirm_delete_records", False):
-        st.error("This permanently deletes this demo username's local event, telemetry and scenario rows.")
-        yes, no = st.columns(2)
-        if yes.button("Confirm permanent deletion", type="primary"):
-            with db_connect() as con:
-                for table in ("events", "telemetry", "scenarios"):
-                    con.execute(f"DELETE FROM {table} WHERE username=?", (s.username,))
-                con.commit()
-            st.session_state["confirm_delete_records"] = False
-            st.success("Local demo records deleted.")
-            st.rerun()
-        if no.button("Cancel deletion"):
-            st.session_state["confirm_delete_records"] = False
-            st.rerun()
-
-st.divider()
-st.caption(
-    "AeroGuard v6.0 is a local educational prototype. Authentication is demo-only; "
-    "telemetry is synthetic; prediction and response calculations are illustrative; "
-    "the SQLite database is local to the machine running Streamlit."
-)
-
-if s.live_stream:
-    time.sleep(1)
-    st.rerun()
+st.markdown('<div style="border-top:1px solid #173653;margin-top:22px;padding-top:12px;color:#7895af;font-size:.68rem">AEROGUARD V7.0 · RESEARCH PROTOTYPE · NO LIVE SPACECRAFT CONNECTION · SIMULATIONS REQUIRE VALIDATION BEFORE SCIENTIFIC OR OPERATIONAL USE</div>',unsafe_allow_html=True)
