@@ -177,23 +177,23 @@ def load_nasa_psi_database():
 
 df = load_nasa_psi_database()
 
-    # Sidebar Controls
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🚀 Mission Flight Phase")
+# Sidebar Controls
+st.sidebar.markdown("---")
+st.sidebar.subheader("🚀 Mission Flight Phase")
     
-    selected_phase_key = st.sidebar.selectbox(
-        "Select Ascent / Orbital Phase",
-        options=list(FLIGHT_PROFILES.keys()),
-        format_func=lambda x: FLIGHT_PROFILES[x]["name"],
-        index=0
-    )
+selected_phase_key = st.sidebar.selectbox(
+    "Select Ascent / Orbital Phase",
+    options=list(FLIGHT_PROFILES.keys()),
+    format_func=lambda x: FLIGHT_PROFILES[x]["name"],
+    index=0
+)
     
-    active_profile = FLIGHT_PROFILES[selected_phase_key]
+active_profile = FLIGHT_PROFILES[selected_phase_key]
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
-    st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
-    if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
+st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
+if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
     st.session_state.logged_in = False
     st.session_state.user_email = ""
     st.rerun()
