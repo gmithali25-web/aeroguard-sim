@@ -4,6 +4,41 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import time
+# --- MENTOR-BACKED FLIGHT PROFILES & ALTITUDE PHYSICS ---
+FLIGHT_PROFILES = {
+    "orbital_microgravity": {
+        "name": "Orbital Habitation (ISS / Lunar Gateway)",
+        "altitude_ft": 250000,
+        "external_temp_c": -150.0,
+        "dynamic_pressure_kpa": 0.0,
+        "vibration_stress_factor": 1.0,
+        "description": "Stable orbital environment. Zero aerodynamic drag; internal ECLSS manages life support."
+    },
+    "max_q_ascent": {
+        "name": "Max-Q Transonic Ascent (40,000 ft)",
+        "altitude_ft": 40000,
+        "external_temp_c": -56.5,
+        "dynamic_pressure_kpa": 35.4,
+        "vibration_stress_factor": 2.4,
+        "description": "Peak dynamic pressure zone. High mechanical stress & severe aerodynamic heat flux."
+    },
+    "stratosphere_climb": {
+        "name": "Stratosphere Cruise (80,000 ft)",
+        "altitude_ft": 80000,
+        "external_temp_c": -51.0,
+        "dynamic_pressure_kpa": 5.1,
+        "vibration_stress_factor": 1.5,
+        "description": "High-altitude climb. Sub-zero external temperature gradients across the hull."
+    },
+    "ground_liftoff": {
+        "name": "Pad Liftoff & Acoustic Shear (0 ft)",
+        "altitude_ft": 0,
+        "external_temp_c": 15.0,
+        "dynamic_pressure_kpa": 0.0,
+        "vibration_stress_factor": 1.0,
+        "description": "Initial launch pad phase with high acoustic resonance and structural vibration."
+    }
+}
 from datetime import datetime
 
 # Page Configuration
@@ -143,6 +178,19 @@ def load_nasa_psi_database():
 df = load_nasa_psi_database()
 
 # Sidebar Controls
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🚀 Mission Flight Phase")
+    
+    selected_phase_key = st.sidebar.selectbox(
+        "Select Ascent / Orbital Phase",
+        options=list(FLIGHT_PROFILES.keys()),
+        format_func=lambda x: FLIGHT_PROFILES[x]["name"],
+        index=0
+    )
+    
+    active_profile = FLIGHT_PROFILES[selected_phase_key]
+
+    st.sidebar.markdown("---")
 st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
 st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
 if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
