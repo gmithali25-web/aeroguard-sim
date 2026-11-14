@@ -190,7 +190,7 @@ df = load_nasa_psi_database()
     
     active_profile = FLIGHT_PROFILES[selected_phase_key]
 
-    st.sidebar.markdown("---")
+st.sidebar.markdown("---")
 st.sidebar.markdown(f"## 🛰️ GUARDIAN CONTROLLER")
 st.sidebar.markdown(f"**Authenticated Account:**\n`{st.session_state.user_email}`")
 if st.sidebar.button("🚪 Logout / Switch Account", use_container_width=True):
