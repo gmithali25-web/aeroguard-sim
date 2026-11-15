@@ -100,7 +100,7 @@ if not st.session_state.logged_in:
 
 if "telemetry_history" not in st.session_state:
     np.random.seed(42)
-    times = pd.date_range(end=datetime.now(), periods=20, freq="2S")
+    times = pd.date_range(end=datetime.now(), periods=20, freq="2s")
     st.session_state.telemetry_history = pd.DataFrame({
         "Timestamp": [t.strftime("%H:%M:%S") for t in times],
         "CO_ppm": np.random.normal(1.2, 0.2, 20).clip(0.5, 5.0),
