@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Page Configuration
 st.set_page_config(
-    page_title="AeroGuard v4.7 | Expanded 3D Box & Colab Pipeline",
+    page_title="AeroGuard v4.7 | Expanded 3D Box",
     page_icon="🛰️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -75,14 +75,14 @@ if not st.session_state.logged_in:
                 <p style="color: #94a3b8; font-size: 14px; margin-bottom: 25px;">Secure Microgravity Fire Safety & Flight Control System</p>
             </div>
         """, unsafe_allow_html=True)
-
+        
         st.markdown("<div style='max-width: 480px; margin: -70px auto 0 auto; padding: 0 40px;'>", unsafe_allow_html=True)
-
+        
         if st.button("🔑 Continue with Google", use_container_width=True, type="primary"):
             st.session_state.logged_in = True
             st.session_state.user_email = "operator.google@nasa-analogue.org"
             st.rerun()
-
+            
         if st.button("🐦 Continue with Twitter (X)", use_container_width=True):
             st.session_state.logged_in = True
             st.session_state.user_email = "operator.twitter@aeroguard-ops.io"
@@ -92,7 +92,7 @@ if not st.session_state.logged_in:
             st.session_state.logged_in = True
             st.session_state.user_email = "guest.controller@aeroguard.sim"
             st.rerun()
-
+            
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
@@ -127,8 +127,8 @@ def load_nasa_psi_database():
     return pd.DataFrame({
         "Mission_ID": ["FLEX-01", "BASS-02", "SPICE-01", "SAME-R", "FLEX-02", "Saffire-IV", "BASS-M", "FLEX-ICE", "ACME-E", "Saffire-V"],
         "Fuel_Material": [
-            "Gaseous Propane", "Solid PMMA (Acrylic)", "Methane Jet",
-            "ETFE Wire Insulation", "Ethanol Droplet", "Cotton-Fiberglass Nomex",
+            "Gaseous Propane", "Solid PMMA (Acrylic)", "Methane Jet", 
+            "ETFE Wire Insulation", "Ethanol Droplet", "Cotton-Fiberglass Nomex", 
             "Cast PMMA Rod", "n-Heptane Droplet", "Ethylene Coflow", "Silicone Composite"
         ],
         "Class": ["Hydrocarbon Gas", "Thermoplastic", "Hydrocarbon Gas", "Avionics Wiring", "Liquid Propellant", "Crew Fabric", "Thermoplastic", "Liquid Fuel", "Gas Jet", "Sealant/Polymer"],
@@ -212,10 +212,10 @@ time_remaining = 0
 if st.session_state.anomaly_active and st.session_state.anomaly_start_time:
     time_elapsed = int(time.time() - st.session_state.anomaly_start_time)
     time_remaining = max(0, st.session_state.fire_duration_sec - time_elapsed)
-
+    
     if not st.session_state.rack_power_cut:
         st.session_state.damage_accumulator = min(100.0, st.session_state.damage_accumulator + (est_spread * 0.12))
-
+    
     if time_elapsed >= st.session_state.fire_duration_sec:
         st.session_state.anomaly_active = False
         st.session_state.mission_history_db.append({
@@ -270,21 +270,20 @@ k5.metric("Radiative Heat Flux", f"{round(fuel_row['Radiative_Flux_kW_m2'] * o2_
 st.markdown("<br>", unsafe_allow_html=True)
 
 # Tabs
-tab_damage, tab_live, tab_3d, tab_control, tab_history, tab_ai, tab_colab = st.tabs([
+tab_damage, tab_live, tab_3d, tab_control, tab_history, tab_ai = st.tabs([
     "🛡️ Surface & Structural Damage Assessment",
     "📡 Live Sensor Stream",
     "🧊 3D Flammability Phase Space",
     "🎛️ Automated Suppression Overrides",
     "📜 Mission Logs & History",
-    "🤖 AI Guardian Physicist & Reverse Optimizer",
-    "☁️ Colab & GitHub Pipeline"
+    "🤖 AI Guardian Physicist & Reverse Optimizer"
 ])
 
 # TAB 1: Surface & Structural Damage Assessment
 with tab_damage:
     st.subheader(f"Thermal Degradation & Surface Impact Analysis: `{selected_fuel}`")
     st.markdown("Real-time simulation of pyrolytic mass loss, surface charring depth, and structural load failure during microgravity combustion.")
-
+    
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         st.markdown("### 📋 Material Degradation Metrics")
@@ -292,7 +291,7 @@ with tab_damage:
         st.write(f"- **Cumulative Surface Burn Area:** `{round(damage_pct * 1.4, 1)} cm²`")
         st.write(f"- **Estimated Pyrolysis Depth:** `{round(damage_pct * 0.08, 2)} mm` into bulkhead/rack substrate.")
         st.write(f"- **Active Drill Countdown:** `{time_remaining} seconds remaining`")
-
+        
         if damage_pct < 10:
             st.success("🟢 **Surface Status:** Nominal. Minor thermal reflection only. No structural compromise.")
         elif damage_pct < 40:
@@ -304,7 +303,7 @@ with tab_damage:
         st.markdown("### 📊 Structural Integrity Monitoring")
         st.markdown(f"**Remaining Load Capacity:** `{structural_integrity}%`")
         st.progress(int(structural_integrity))
-
+        
         if structural_integrity > 75:
             st.info("✅ **Assessment:** Habitat structural envelope is fully secure against current thermal loads.")
         elif structural_integrity > 40:
@@ -321,26 +320,26 @@ with tab_live:
     fig_live.update_layout(template="plotly_dark", height=350, xaxis_title="UTC Time", yaxis_title="Amplitude")
     st.plotly_chart(fig_live, use_container_width=True)
 
-# TAB 3: 3D Phase Space
+# TAB 3: 3D Phase Space (UPDATED WITH VERTICAL BOUNDED BOX & SCROLL ZOOM)
 with tab_3d:
     st.subheader("3D Microgravity Combustion Risk Envelope")
     st.markdown("Interactive phase space mapping ventilation velocity, oxygen levels, and radiative heat flux against material quench difficulty.")
-
+    
     st.markdown('<div class="plot-box-container">', unsafe_allow_html=True)
-
+    
     fig_3d = px.scatter_3d(
-        df,
-        x="Airflow_cm_s",
-        y="Oxygen_Pct",
-        z="Radiative_Flux_kW_m2",
-        color="Quench_Difficulty",
-        size="Flame_Spread_mm_s",
-        hover_name="Mission_ID",
+        df, 
+        x="Airflow_cm_s", 
+        y="Oxygen_Pct", 
+        z="Radiative_Flux_kW_m2", 
+        color="Quench_Difficulty", 
+        size="Flame_Spread_mm_s", 
+        hover_name="Mission_ID", 
         color_discrete_map={"Low": "#10b981", "Moderate": "#f59e0b", "High": "#ef4444", "Critical": "#a855f7"}
     )
     fig_3d.update_layout(
-        template="plotly_dark",
-        height=550,
+        template="plotly_dark", 
+        height=550, 
         scene=dict(
             xaxis_title="Airflow (cm/s)",
             yaxis_title="Oxygen %",
@@ -349,7 +348,7 @@ with tab_3d:
         margin=dict(l=0, r=0, b=0, t=30)
     )
     st.plotly_chart(fig_3d, use_container_width=True)
-
+    
     st.markdown('</div>', unsafe_allow_html=True)
 
 # TAB 4: Hardware Overrides
@@ -375,25 +374,25 @@ with tab_control:
 with tab_history:
     st.subheader(f"📜 Flight Controller Audit Trail & History: `{st.session_state.user_email}`")
     st.markdown("All completed fire anomaly drills, input parameters, and resulting structural damage are securely recorded here.")
-
+    
     user_logs_indexed = [
-        (idx, log) for idx, log in enumerate(st.session_state.mission_history_db)
+        (idx, log) for idx, log in enumerate(st.session_state.mission_history_db) 
         if log["User"] == st.session_state.user_email
     ]
-
+    
     if user_logs_indexed:
         df_history = pd.DataFrame([log for _, log in user_logs_indexed])
         st.dataframe(df_history, use_container_width=True)
-
+        
         st.markdown("---")
         st.subheader("🗑️ Clean Up / Delete Specific Mission Records")
-
+        
         selected_indices_to_delete = st.multiselect(
             "Select specific mission records to remove:",
             options=[item[0] for item in user_logs_indexed],
             format_func=lambda idx: f"[{st.session_state.mission_history_db[idx]['Timestamp']}] {st.session_state.mission_history_db[idx]['Module']} ({st.session_state.mission_history_db[idx]['Material']}) - Damage: {st.session_state.mission_history_db[idx]['Final_Damage_Pct']}%"
         )
-
+        
         col_del1, col_del2 = st.columns([1, 4])
         if col_del1.button("🗑️ Delete Selected Records", type="primary"):
             if selected_indices_to_delete:
@@ -413,26 +412,26 @@ with tab_history:
 with tab_ai:
     st.subheader("🤖 AI Guardian Physicist & Reverse Parameter Optimizer")
     st.markdown("Provide your **desired safety output** (maximum allowable damage %), and the AI will reverse-calculate the safe operating inputs for your chosen habitat and material.")
-
+    
     col_ai1, col_ai2 = st.columns(2)
-
+    
     with col_ai1:
         st.markdown("### 🎯 Target Output Requirements")
         target_max_damage = st.number_input(
-            "Max Allowable Surface Damage (%)",
-            min_value=0.1,
-            max_value=100.0,
-            value=10.0,
+            "Max Allowable Surface Damage (%)", 
+            min_value=0.1, 
+            max_value=100.0, 
+            value=10.0, 
             step=1.0,
             format="%.1f"
         )
         target_eval_material = st.selectbox("Select Material for Reverse Analysis", df["Fuel_Material"].unique(), key="rev_mat")
         target_eval_module = st.selectbox("Select Habitat Module", ["ISS - Destiny Laboratory", "ISS - Harmony Node 2", "Lunar Gateway - HALO", "Orion Crew Capsule"], key="rev_mod")
-
+        
         mat_row = df[df["Fuel_Material"] == target_eval_material].iloc[0]
         max_safe_o2 = round(mat_row["Limiting_O2_Index"] + (target_max_damage / 15.0), 1)
         max_safe_airflow = round(max(0.5, 12.0 - (target_max_damage * 0.2)), 1)
-
+        
         calculate_inputs = st.button("✨ Reverse-Engineer Safe Inputs", type="primary", use_container_width=True)
 
     with col_ai2:
@@ -449,60 +448,6 @@ with tab_ai:
             st.warning(f"💡 **AI Note:** Operating above `{max_safe_o2}% O₂` with `{target_eval_material}` risks exceeding your `{target_max_damage}%` damage threshold during a thermal anomaly.")
         else:
             st.info("👈 Type your target damage threshold into the text box and click **'Reverse-Engineer Safe Inputs'** to generate AI recommendations.")
-
-# TAB 7: Google Colab & GitHub Integration Pipeline
-with tab_colab:
-    st.subheader("☁️ Google Colab & GitHub Data Pipeline")
-    st.markdown("Run your NASA PSI-117 schema validation pipeline directly in Google Colab and sync validated combustion records back to your GitHub repository.")
-
-    st.markdown("### 🐍 Google Colab Validation Script Template")
-    st.markdown("Copy and paste this script into a Google Colab notebook cell to test your combustion data processing workflow:")
-
-    colab_code = '''import pandas as pd
-import numpy as np
-
-# Load combustion dataset
-url = "https://raw.githubusercontent.com/your-username/aeroguard-sim/main/combustion_data.csv"
-try:
-    df = pd.read_csv(url)
-except:
-    # Fallback sample DataFrame
-    df = pd.DataFrame({
-        "trial_id": ["TRL-001", "TRL-002", "TRL-003"],
-        "droplet_diameter": [1.2, 0.8, 1.5],
-        "chamber_pressure": [101.3, 95.0, 105.2],
-        "oxygen_concentration": [21.0, 30.0, 18.5],
-        "fuel_material": ["Gaseous Propane", "Solid PMMA", "Ethanol"]
-    })
-
-def validate_psi117_schema(row):
-    required_fields = ['trial_id', 'droplet_diameter', 'chamber_pressure', 'oxygen_concentration', 'fuel_material']
-    for field in required_fields:
-        if pd.isna(row.get(field)):
-            return "fail", f"Missing required field: {field}"
-    return "pass", ""
-
-df['validation_status'], df['error_message'] = zip(*df.apply(validate_psi117_schema, axis=1))
-print("Validation Complete!")
-display(df)
-'''
-    st.code(colab_code, language="python")
-
-    st.markdown("---")
-    st.markdown("### 📂 GitHub Sync Commands for Colab")
-    st.markdown("Run these terminal commands inside a Google Colab cell (prefixed with `!`) to commit your validated trials back to GitHub:")
-
-    git_code = '''!git config --global user.email "operator@aeroguard-sim.io"
-!git config --global user.name "AeroGuard Colab Agent"
-!git clone https://github.com/your-username/aeroguard-sim.git
-# Move validated data to repo and push
-!cp validated_trials.csv aeroguard-sim/data/
-%cd aeroguard-sim
-!git add .
-!git commit -m "Auto-synced validated NASA PSI-117 combustion trial from Google Colab"
-!git push origin main
-'''
-    st.code(git_code, language="bash")
 
 if live_stream and st.session_state.anomaly_active:
     time.sleep(1.0)
