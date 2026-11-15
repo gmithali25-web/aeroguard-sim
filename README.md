@@ -1,27 +1,25 @@
-# 🚀 AeroGuard Sim
+# 🛰️ AeroGuard: Autonomous Microgravity Fire Guardian & 3D Flight Simulator
 
-**Flame in Freefall: SI-Powered Fire Safety Insights from Microgravity Combustion Data**
+AeroGuard is a next-generation microgravity fire-safety monitoring and rocket flight simulation platform designed for research scholars, astronauts, and flight controllers. Built with scientific rigor, it integrates **NASA PSI-117 combustion reference datasets**, real-time anomaly tracking, and interactive 3D visualizations.
 
-> NASA Space Apps Hackathon 2026
+---
 
-## Overview
+## ✨ Key Features
 
-AeroGuard Sim is an interactive research & learning platform that combines:
+1. **Multi-Provider OAuth Gateway**: Secure simulation access supporting Google, Twitter (X), and Guest Controller sign-ins.
+2. **Surface & Structural Damage Assessment**: Real-time pyrolytic mass loss, charring depth calculations, and load capacity degradation tracking.
+3. **Live Sensor Stream**: Carbon Monoxide (CO ppm) and optical smoke obscuration monitoring.
+4. **3D Flammability Phase Space**: Interactive Plotly 3D scatter plots mapping airflow, ambient oxygen percentage, and radiative heat flux against quench difficulty.
+5. **Hardware Overrides**: Emergency interlocks for HVAC damper isolation, rack power cutoff, and water-mist suppression.
+6. **AI Guardian Physicist & Reverse Optimizer**: Reverse-calculates safe ambient operational parameters based on user-defined damage thresholds.
+7. **Google Colab & GitHub Integration**: Built-in pipeline guidance for validating NASA datasets and syncing simulation logs.
 
-- **🌍 3D Mission Simulator** — Launch NASA rockets from any point on a live CesiumJS globe with satellite imagery, gravity-turn animation, and real-time fire hazard visualization
-- **🔥 ACME Combustion Lab** — Microgravity flame data with filters, scatter plots, and hazard correlation
-- **📁 PSI-117 Dataset Explorer** — DOI-traceable droplet combustion benchmarks (n-heptane, n-dodecane, n-decane)
-- **🎓 Student Learning Lab** — Interactive sliders for droplet diameter, pressure, and O₂ with closest ACME reference
-- **🔒 Data Provenance Audit** — SHA-256 verified file uploads with audit trail
+---
 
-## Tech Stack
+## 🚀 Running via Google Colab
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Streamlit + Plotly + PyDeck |
-| 3D Globe | CesiumJS 1.120 + NASA GIBS (MODIS Terra) + ArcGIS World Imagery |
-| Data | NASA PSI-117, NASA ACME, FLEX-ISS |
-| Physics | Simplified gravity-turn, d²-law burn rate, O₂ threshold hazard model |
+To run and test AeroGuard instantly inside Google Colab:
 
-## Folder Structure
-   
+1. Create a new notebook and install dependencies:
+   ```bash
+   !pip install -r requirements.txt
