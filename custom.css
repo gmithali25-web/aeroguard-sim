@@ -1,0 +1,106 @@
+/* AeroGuard Sim — Custom Theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg: #050d1b;
+  --panel: #09182b;
+  --panel2: #0b2038;
+  --line: #173653;
+  --cyan: #22d3ee;
+  --teal: #19d3b0;
+  --muted: #8ba7c2;
+  --white: #eaf4ff;
+  --red: #ef4444;
+  --orange: #f97316;
+  --yellow: #fbbf24;
+}
+
+.stApp {
+  background: radial-gradient(ellipse at 50% 0%, #0a1c33 0%, #050d1b 58%);
+  color: var(--white);
+}
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+section[data-testid="stSidebar"] {
+  background: #061326;
+  border-right: 1px solid var(--line);
+}
+section[data-testid="stSidebar"] * { color: #d8e8f7; }
+
+.block-container {
+  padding-top: 1.1rem;
+  padding-bottom: 2rem;
+  max-width: 1800px;
+}
+
+/* Brand */
+.ag-brand { font-size: 1.22rem; font-weight: 800; letter-spacing: 0.12em; color: #f1f8ff; }
+.ag-brand span { color: var(--cyan); }
+.ag-sub { font-size: 0.66rem; letter-spacing: 0.18em; color: #7796b3; }
+
+/* Panels */
+.ag-panel {
+  background: linear-gradient(145deg, rgba(12,32,55,0.97), rgba(6,19,36,0.98));
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 15px 17px;
+  margin-bottom: 12px;
+}
+.ag-panel-title { color: #dcecff; font-size: 0.91rem; font-weight: 700; margin-bottom: 8px; }
+.ag-muted { color: var(--muted); font-size: 0.78rem; }
+
+/* KPI Cards */
+.ag-kpi {
+  background: linear-gradient(145deg, #0c2340, #08172a);
+  border: 1px solid #1b4263;
+  border-radius: 11px;
+  padding: 12px 14px;
+  min-height: 88px;
+}
+.ag-kpi-label { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.ag-kpi-value { color: #f1f8ff; font-family: 'Space Mono', monospace; font-size: 1.25rem; font-weight: 700; margin-top: 5px; }
+
+/* Chips */
+.ag-chip {
+  display: inline-block;
+  border: 1px solid #176b70;
+  background: #073b40;
+  color: #67f3df;
+  border-radius: 20px;
+  padding: 3px 9px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+/* Metrics */
+div[data-testid="stMetric"] {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+div[data-testid="stMetricLabel"] { color: var(--muted); }
+div[data-testid="stMetricValue"] { color: #f1f8ff; font-family: 'Space Mono', monospace; }
+
+/* Buttons */
+.stButton > button, .stDownloadButton > button {
+  background: #073b50;
+  border: 1px solid #167d96;
+  color: #dffaff;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.stButton > button:hover, .stDownloadButton > button:hover {
+  border-color: var(--cyan);
+  color: white;
+}
+
+/* Hide footer */
+footer { visibility: hidden; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }   
