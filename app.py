@@ -2,475 +2,427 @@ from __future__ import annotations
 
 import hashlib
 import io
-import re
 import zipfile
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
+import plotly.express as px
 import pydeck as pdk
+import streamlit as st
 
 
 # ============================================================
-# AEROGUARD SIM | RESEARCH & LEARNING AEROSPACE PLATFORM
-# Tailored for Aerospace Research Scholars, Professors, and Students.
+# AEROGUARD SIM — research-first aerospace fire-safety platform
 # ============================================================
 
 st.set_page_config(
-    page_title="AeroGuard Sim | Research & Learning Platform",
+    page_title="AeroGuard Sim | Aerospace Research Lab",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# --------------------------- THEME ---------------------------
-
 st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
-    :root {
-        --bg:#050d1b; --panel:#09182b; --panel2:#0b2038;
-        --line:#173653; --cyan:#22d3ee; --teal:#19d3b0;
-        --muted:#8ba7c2; --white:#eaf4ff;
-    }
-    .stApp {background:radial-gradient(ellipse at 50% 0%, #0a1c33 0%, #050d1b 58%); color:var(--white);}
-    html, body, [class*="css"] {font-family:Inter,sans-serif;}
-    section[data-testid="stSidebar"] {background:#061326; border-right:1px solid #173653;}
+    :root { --bg:#050d1b; --panel:#0a1b30; --line:#173653; --cyan:#22d3ee;
+            --teal:#19d3b0; --muted:#91a9c2; --white:#edf6ff; }
+    .stApp {background:radial-gradient(ellipse at 50% 0%,#0b2340 0%,#050d1b 58%);color:var(--white);}
+    html,body,[class*="css"] {font-family:Inter,sans-serif;}
+    section[data-testid="stSidebar"] {background:#061326;border-right:1px solid var(--line);}
     section[data-testid="stSidebar"] * {color:#d8e8f7;}
-    .block-container {padding-top:1.1rem; padding-bottom:2rem; max-width:1800px;}
-    .ag-top {display:flex; justify-content:space-between; align-items:center; padding:8px 2px 15px;
-             border-bottom:1px solid #173653; margin-bottom:16px;}
-    .ag-brand {font-size:1.22rem; font-weight:800; letter-spacing:.12em; color:#f1f8ff;}
-    .ag-brand span {color:#22d3ee;}
-    .ag-sub {font-size:.66rem; letter-spacing:.18em; color:#7796b3;}
-    .ag-panel {background:linear-gradient(145deg,rgba(12,32,55,.97),rgba(6,19,36,.98));
-               border:1px solid #173653; border-radius:13px; padding:15px 17px; margin-bottom:12px;}
-    .ag-panel-title {color:#dcecff; font-size:.91rem; font-weight:700; margin-bottom:8px;}
-    .ag-muted {color:#8ba7c2; font-size:.78rem;}
-    .ag-kpi {background:linear-gradient(145deg,#0c2340,#08172a); border:1px solid #1b4263;
-             border-radius:11px; padding:12px 14px; min-height:88px;}
-    .ag-kpi-label {color:#8ba7c2; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase;}
-    .ag-kpi-value {color:#f1f8ff; font-family:'Space Mono'; font-size:1.25rem; font-weight:700; margin-top:5px;}
-    .ag-chip {display:inline-block; border:1px solid #176b70; background:#073b40; color:#67f3df;
-              border-radius:20px; padding:3px 9px; font-size:.65rem; font-weight:700; letter-spacing:.06em;}
-    div[data-testid="stMetric"] {background:#0b2038; border:1px solid #173653; padding:10px 12px; border-radius:10px;}
-    div[data-testid="stMetricLabel"] {color:#8ba7c2;}
-    div[data-testid="stMetricValue"] {color:#f1f8ff; font-family:'Space Mono';}
-    .stButton>button, .stDownloadButton>button {background:#073b50; border:1px solid #167d96;
-        color:#dffaff; border-radius:8px; font-weight:600;}
-    .stButton>button:hover, .stDownloadButton>button:hover {border-color:#22d3ee; color:white;}
+    .block-container {padding-top:1.1rem;max-width:1800px;}
+    .hero {padding:22px 24px;border:1px solid #1c4565;border-radius:16px;
+           background:linear-gradient(120deg,rgba(9,34,59,.98),rgba(5,16,31,.94));}
+    .eyebrow {font:700 .68rem 'Space Mono';letter-spacing:.18em;color:var(--cyan);}
+    .hero h1 {font-size:2rem;margin:.35rem 0;color:#f4f9ff;}
+    .hero p {color:#9bb4cd;margin:0;}
+    .panel {padding:16px 18px;border:1px solid var(--line);border-radius:13px;
+            background:linear-gradient(145deg,rgba(12,32,55,.97),rgba(6,19,36,.98));}
+    .muted {color:var(--muted);font-size:.82rem;}
+    .kpi {padding:13px 15px;border:1px solid #1b4263;border-radius:11px;
+          background:linear-gradient(145deg,#0c2340,#08172a);min-height:90px;}
+    .kpi-label {font-size:.67rem;letter-spacing:.1em;text-transform:uppercase;color:#91a9c2;}
+    .kpi-value {font:700 1.25rem 'Space Mono';color:#f1f8ff;margin-top:7px;}
+    div[data-testid="stMetric"] {background:#0b2038;border:1px solid #173653;padding:10px 12px;border-radius:10px;}
+    div[data-testid="stMetricLabel"] {color:#91a9c2;}
+    div[data-testid="stMetricValue"] {color:#f1f8ff;font-family:'Space Mono';}
+    .stButton>button,.stDownloadButton>button {background:#073b50;border:1px solid #167d96;color:#e2fbff;border-radius:8px;}
     footer {visibility:hidden;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ------------------------- CONSTANTS -------------------------
-
+# NASA SLS Block 1 published reference values. Not a full vehicle CAD model.
+SLS = {
+    "vehicle_height_m": 98.3,
+    "core_height_m": 64.6,
+    "core_diameter_m": 8.4,
+    "core_empty_mass_kg": 85275,
+    "launch_thrust_kN": 36786,
+    "max_thrust_kN": 39144,
+    "boosters": 2,
+    "rs25": 4,
+    "booster_burn_s": 126,
+    "core_burn_s": 480,
+}
+NASA_SLS_URL = "https://www.nasa.gov/reference/sls-space-launch-system-core-stage/"
+NASA_SLS_GUIDE = "https://www.nasa.gov/wp-content/uploads/2022/03/sls-reference-guide-2022-v2-508-0.pdf"
+PSI_URL = "https://psi.nasa.gov/physci/repo/search?data_source=psi&data_type=investigation"
 STUDY_ID = "PSI-117"
-STUDY_TITLE = (
-    "Effect of External Thermo-Convective Perturbation on Cool Flame Dynamics"
-)
-DOI = "10.60555/gz0q-b577"
+STUDY_TITLE = "Effect of External Thermo-Convective Perturbation on Cool Flame Dynamics: A Multidimensional Multi-Physics CFD Analysis"
 
-FLIGHT_PROFILES = {
-    "ground_liftoff": {
-        "name": "Pad Liftoff & Acoustic Shear (0 ft)",
-        "altitude_ft": 0,
-        "external_temp_c": 15.0,
-        "dynamic_pressure_kpa": 0.0,
-        "vibration_stress_factor": 1.0,
-        "description": "Initial launch pad phase with high acoustic resonance and structural vibration.",
-    },
-    "max_q": {
-        "name": "Max Dynamic Pressure (35,000 ft)",
-        "altitude_ft": 35000,
-        "external_temp_c": -56.5,
-        "dynamic_pressure_kpa": 32.4,
-        "vibration_stress_factor": 2.8,
-        "description": "Maximum aerodynamic loading and structural mechanical stress point.",
-    },
-    "stratosphere_climb": {
-        "name": "Stratosphere Cruise (80,000 ft)",
-        "altitude_ft": 80000,
-        "external_temp_c": -51.0,
-        "dynamic_pressure_kpa": 5.1,
-        "vibration_stress_factor": 1.5,
-        "description": "High-altitude climb. Sub-zero external temperature gradients across the hull.",
-    },
+FLIGHT_PHASES = {
+    "Pad / ignition": {"altitude_km": 0.0, "description": "Pre-launch and ignition context. Ground-level boundary conditions are site-dependent."},
+    "Early ascent": {"altitude_km": 15.0, "description": "Illustrative early-ascent state; aerodynamic and acoustic loads require vehicle-specific models."},
+    "Max-Q region": {"altitude_km": 11.0, "description": "Maximum dynamic pressure is trajectory-dependent; this preset is conceptual, not a flight prediction."},
+    "Upper ascent": {"altitude_km": 60.0, "description": "Upper-atmosphere region with rapidly changing density and external heat-transfer conditions."},
+    "Core-stage cutoff": {"altitude_km": 160.0, "description": "Reference stage-separation context; actual altitude varies by mission and trajectory."},
+}
+LAUNCH_SITES = {
+    "Kennedy Space Center, LC-39B": (28.573, -80.649),
+    "Vandenberg Space Force Base": (34.742, -120.572),
+    "Wallops Flight Facility": (37.940, -75.466),
+    "Satish Dhawan Space Centre": (13.719, 80.230),
+    "Custom coordinates": (28.573, -80.649),
 }
 
-VARIABLE_HINTS = {
-    "Ignition delay": ["ignition_delay", "ignition delay", "tau_ign"],
-    "Flame stand-off diameter": ["stand_off_diameter", "standoff_diameter"],
-    "Extinction diameter": ["extinction_diameter", "d_ext"],
-    "Oscillation frequency": ["oscillation_frequency", "frequency"],
-    "Droplet diameter": ["droplet_diameter", "initial_diameter"],
-    "Temperature": ["temperature", "temperature_k", "temp_k"],
-    "Pressure": ["pressure", "pressure_pa", "pressure_kpa"],
-    "Time": ["time", "time_s", "timestamp"],
-}
-
-# --------------------------- HELPERS -------------------------
-
-def sha256_bytes(data: bytes) -> str:
+def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
-def normalize_name(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
+def read_table(name: str, raw: bytes) -> pd.DataFrame:
+    low = name.lower()
+    if low.endswith(".csv"):
+        for enc in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                return pd.read_csv(io.BytesIO(raw), encoding=enc)
+            except Exception:
+                pass
+        raise ValueError("Could not decode CSV.")
+    if low.endswith((".xlsx", ".xls")):
+        return pd.read_excel(io.BytesIO(raw))
+    raise ValueError("Unsupported table format.")
 
-def read_csv_bytes(data: bytes) -> pd.DataFrame:
-    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
-        try:
-            return pd.read_csv(io.BytesIO(data), encoding=encoding)
-        except Exception:
-            pass
-    raise ValueError("Could not read CSV file.")
-
-@st.cache_data
-def load_nasa_psi_database():
-    try:
-        df = pd.read_excel("PSI-117_Analyzed Data_ReadMe_List_of_Data.xlsx")
-    except Exception:
-        data = {
-            "Fuel": ["n-heptane", "n-heptane", "n-dodecane", "n-dodecane"],
-            "do (mm)": [0.5, 2.0, 4.5, 4.0],
-            "P (atm)": [1.0, 1.0, 2.75, 1.0],
-            "XO2": ["21%", "21%", "21%", "21%"],
-            "Data File": ["PROCI_2019_Stable_Cool", "PROCI_2023_Alkane", "PROCI_C12_2019", "MST_2024"],
-            "Reference": [
-                "https://doi.org/10.1016/j.proci.2018.05.151",
-                "https://doi.org/10.1016/j.proci.2022.07.094",
-                "https://doi.org/10.1016/j.proci.2018.09.015",
-                "https://doi.org/10.1007/s12217-024-10115-x",
-            ],
-        }
-        df = pd.DataFrame(data)
-    return df
-
-def inspect_upload(uploaded_file):
-    filename = uploaded_file.name
-    raw = uploaded_file.getvalue()
-    file_records = []
-    dataframes = []
-    text_documents = []
-
-    file_records.append({
-        "File": filename,
-        "Bytes": len(raw),
-        "SHA-256": sha256_bytes(raw),
-        "Uploaded UTC": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    })
-
-    if filename.lower().endswith(".zip"):
-        try:
-            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                for member in archive.infolist():
+def load_uploaded_bundle(files):
+    records, tables, text_files = [], [], []
+    for f in files:
+        raw = f.getvalue()
+        records.append({
+            "File": f.name, "Bytes": len(raw), "SHA-256": sha256(raw),
+            "Uploaded UTC": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+        if f.name.lower().endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                for member in zf.infolist():
                     if member.is_dir():
                         continue
-                    content = archive.read(member)
-                    if member.filename.endswith(".csv"):
-                        df = read_csv_bytes(content)
-                        dataframes.append((f"{filename} :: {member.filename}", df, sha256_bytes(content)))
-                    else:
-                        text_documents.append((f"{filename} :: {member.filename}", content.decode("utf-8", errors="replace")))
-        except Exception as e:
-            text_documents.append((filename, f"Error parsing ZIP archive: {e}"))
-    else:
-        if filename.endswith(".csv"):
-            dataframes.append((filename, read_csv_bytes(raw), sha256_bytes(raw)))
-        elif filename.endswith((".xlsx", ".xls")):
-            try:
-                dataframes.append((filename, pd.read_excel(io.BytesIO(raw)), sha256_bytes(raw)))
-            except Exception as e:
-                text_documents.append((filename, f"Excel read error: {e}"))
+                    # Avoid extracting files; only read supported members in memory.
+                    content = zf.read(member)
+                    suffix = PurePosixPath(member.filename).suffix.lower()
+                    label = f"{f.name} :: {member.filename}"
+                    if suffix in (".csv", ".xlsx", ".xls"):
+                        try:
+                            tables.append((label, read_table(member.filename, content), sha256(content)))
+                        except Exception as exc:
+                            text_files.append((label, f"Table read error: {exc}"))
+                    elif suffix in (".txt", ".md", ".json", ".yaml", ".yml"):
+                        text_files.append((label, content.decode("utf-8", errors="replace")[:200000]))
+        elif f.name.lower().endswith((".csv", ".xlsx", ".xls")):
+            tables.append((f.name, read_table(f.name, raw), sha256(raw)))
         else:
-            text_documents.append((filename, raw.decode("utf-8", errors="replace")))
+            text_files.append((f.name, raw.decode("utf-8", errors="replace")[:200000]))
+    return records, tables, text_files
 
-    return file_records, dataframes, text_documents
-
-def render_kpi(label, value, foot=""):
+def kpi(label, value, note=""):
     st.markdown(
-        f"""
-        <div class="ag-kpi">
-          <div class="ag-kpi-label">{label}</div>
-          <div class="ag-kpi-value">{value}</div>
-          <div class="ag-muted">{foot}</div>
-        </div>
-        """,
+        f'<div class="kpi"><div class="kpi-label">{label}</div>'
+        f'<div class="kpi-value">{value}</div><div class="muted">{note}</div></div>',
         unsafe_allow_html=True,
     )
 
+def rocket_figure(explode: bool = False):
+    """Schematic interactive 3D SLS-like Block 1 layout; not engineering CAD."""
+    fig = go.Figure()
+    # Vertical axis is normalized to vehicle height. Components are intentionally schematic.
+    def cylinder(name, x, y, z0, z1, radius, color, opacity=1.0):
+        theta = np.linspace(0, 2*np.pi, 36)
+        z = np.linspace(z0, z1, 18)
+        T, Z = np.meshgrid(theta, z)
+        X, Y = radius*np.cos(T)+x, radius*np.sin(T)+y
+        fig.add_trace(go.Surface(
+            x=X, y=Y, z=Z, surfacecolor=np.zeros_like(Z),
+            colorscale=[[0,color],[1,color]], showscale=False, opacity=opacity,
+            name=name, hovertemplate=f"<b>{name}</b><extra></extra>",
+        ))
+        # Top and bottom caps
+        for zz in (z0, z1):
+            fig.add_trace(go.Scatter3d(
+                x=x+radius*np.cos(theta), y=y+radius*np.sin(theta),
+                z=np.full_like(theta, zz), mode="lines",
+                line=dict(color=color,width=2), showlegend=False, hoverinfo="skip"
+            ))
+    shift = 7 if explode else 0
+    cylinder("Core stage / LH2 + LOX tanks", 0, 0, 16, 80, 1.0, "#e58a43")
+    cylinder("Forward skirt / intertank", 0, 0, 80, 86, 1.02, "#aebdca")
+    cylinder("Orion / upper stack (schematic)", 0, 0, 86, 98.3, .65, "#d8e6f2")
+    cylinder("Left solid rocket booster", -1.48-shift*.05, 0, 14, 83, .28, "#d7dce3")
+    cylinder("Right solid rocket booster", 1.48+shift*.05, 0, 14, 83, .28, "#d7dce3")
+    # Engine section and four RS-25 nozzle hints
+    for x in (-.42, .42):
+        for y in (-.42, .42):
+            cylinder("RS-25 engine (one of four)", x, y, 8, 16, .17, "#6f879e")
+    fig.update_layout(
+        height=650, margin=dict(l=0,r=0,t=20,b=0),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#d9e9f8"),
+        scene=dict(
+            bgcolor="rgba(0,0,0,0)", aspectmode="manual",
+            aspectratio=dict(x=1,y=1,z=2.7),
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
+            zaxis=dict(title="Schematic height (m)", color="#91a9c2", range=[0,105]),
+            camera=dict(eye=dict(x=1.8,y=1.8,z=1.25)),
+        ),
+        showlegend=False,
+    )
+    return fig
 
-# ---------------------------- SIDEBAR NAVIGATION -------------------------
+def trajectory_figure(progress: float):
+    # Illustration only: a smooth curved path, not an integrated trajectory solver.
+    t = np.linspace(0, max(progress, 0.001), 160)
+    x = 0.12*t + 0.0007*t*t
+    z = 0.025*t + 0.00013*t*t
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(x=x,y=np.zeros_like(x),z=z,mode="lines",
+                               line=dict(color="#22d3ee",width=6),name="Illustrative path"))
+    fig.add_trace(go.Scatter3d(x=[x[-1]],y=[0],z=[z[-1]],mode="markers",
+                               marker=dict(size=7,color="#ff9b52"),name="Vehicle marker"))
+    fig.update_layout(
+        height=430, margin=dict(l=0,r=0,t=15,b=0),
+        paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#d9e9f8"),
+        scene=dict(bgcolor="rgba(0,0,0,0)",xaxis=dict(visible=False),
+                   yaxis=dict(visible=False),zaxis=dict(visible=False),
+                   aspectmode="data"),
+        showlegend=False,
+    )
+    return fig
 
+def map_view(lat, lon):
+    frame = pd.DataFrame({"name":["Selected launch location"],"lat":[lat],"lon":[lon]})
+    layer = pdk.Layer(
+        "ScatterplotLayer", data=frame, get_position="[lon, lat]",
+        get_radius=45000, get_fill_color=[34,211,238,210],
+        get_line_color=[255,255,255,230], line_width_min_pixels=2,
+        pickable=True,
+    )
+    view = pdk.ViewState(latitude=lat, longitude=lon, zoom=4, pitch=35)
+    st.pydeck_chart(pdk.Deck(
+        layers=[layer], initial_view_state=view,
+        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+        tooltip={"text":"{name}"},
+    ), use_container_width=True)
+
+# Session state
+for key, default in {
+    "uploaded_records": [], "uploaded_tables": [], "uploaded_text": [],
+    "processed_names": set(),
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# Sidebar
 with st.sidebar:
-    st.markdown(
-        '<div style="padding:8px 2px 18px"><div class="ag-brand">🚀 AERO<span>GUARD SIM</span></div>'
-        '<div class="ag-sub">RESEARCH & LEARNING WORKSPACE</div></div>',
-        unsafe_allow_html=True,
-    )
-    
-    st.markdown("### OPERATING MODE")
-    app_mode = st.radio(
-        "Choose Mode",
-        ["Research & Publication Suite", "Interactive Student Learning Lab"],
-        label_visibility="collapsed",
-    )
-    
-    st.markdown("---")
-    st.markdown('<span class="ag-chip">NASA PSI-117 ACTIVE</span>', unsafe_allow_html=True)
-    
-    if app_mode == "Research & Publication Suite":
-        page = st.radio(
-            "RESEARCH MODULES",
-            [
-                "Mission Overview & 3D Rocket Model",
-                "Flight Profile & Thermal Simulation",
-                "NASA Dataset Explorer & DOIs",
-                "Data Quality & Provenance Audit",
-            ],
-        )
+    st.markdown("## 🚀 AEROGUARD SIM")
+    st.caption("RESEARCH • SIMULATION • LEARNING")
+    mode = st.radio("Workspace", ["Research Command", "Interactive Learning Lab"])
+    if mode == "Research Command":
+        page = st.radio("Research modules", [
+            "Mission overview & 3D vehicle",
+            "Launch environment & trajectory",
+            "PSI-117 dataset explorer",
+            "Data quality & provenance",
+            "Launch site explorer",
+        ])
     else:
-        page = st.radio(
-            "LEARNING MODULES",
-            [
-                "Student Interactive Lab",
-                "Combustion Theory & Safety Primer",
-            ],
-        )
+        page = st.radio("Learning modules", [
+            "Combustion parameter lab",
+            "Combustion theory & safety",
+        ])
+    st.divider()
+    st.caption("Research reference: NASA PSI-117")
+    st.caption("Vehicle reference: NASA SLS Block 1")
+    st.caption("Models are educational unless explicitly validated.")
 
-    st.markdown("---")
-    st.caption(f"STUDY: {STUDY_ID}")
-    st.caption("DOI: 10.60555/gz0q-b577")
-
-
-# ---------------------------- SESSION STATE -------------------------
-
-if "datasets" not in st.session_state:
-    st.session_state.datasets = []
-if "file_log" not in st.session_state:
-    st.session_state.file_log = []
-if "text_documents" not in st.session_state:
-    st.session_state.text_documents = []
-
-
-# ============================================================
-# MODULE 1: MISSION OVERVIEW & 3D ROCKET MODEL
-# ============================================================
-
-if page == "Mission Overview & 3D Rocket Model":
-    st.title("AeroGuard Sim | Research Command Dashboard")
-    st.caption("High-trust aerospace safety validation, structural telemetry, and NASA combustion benchmarks.")
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        render_kpi("TARGET AUDIENCE", "Research Scholars", "Academic & Peer Review Ready")
-    with c2:
-        render_kpi("DATASET SOURCE", "NASA PSI-117", "Verified Combustion Benchmarks")
-    with c3:
-        render_kpi("ELEVATION RANGE", "0 – 250,000 ft", "Multi-Phase Flight Profiling")
-    with c4:
-        render_kpi("DOI TRACEABILITY", "10.60555/gz0q-b577", "Direct Citations Active")
-
-    st.markdown("### 🛰️ 3D Rocket Structural & Fire Hazard Visualization")
-    st.markdown("Interactive 3D spatial mapping of vehicle structural sections, internal fuel storage ($n$-heptane / $n$-dodecane), and critical Max-Q thermal zones.")
-
-    chart_data = pd.DataFrame([
-        {"name": "Payload & Avionics Bay", "x": 0, "y": 0, "z": 240, "color": [34, 211, 238], "radius": 15},
-        {"name": "Oxidizer Tank (Cryogenic)", "x": 0, "y": 0, "z": 160, "color": [25, 211, 176], "radius": 25},
-        {"name": "Fuel Core (n-Heptane / n-Dodecane)", "x": 0, "y": 0, "z": 90, "color": [255, 120, 50], "radius": 28},
-        {"name": "Main Combustion & Thrust Chamber", "x": 0, "y": 0, "z": 30, "color": [239, 68, 68], "radius": 32},
-        {"name": "Launch Pad Base & Acoustic Dampers", "x": 0, "y": 0, "z": 0, "color": [100, 116, 139], "radius": 40},
-    ])
-
-    try:
-        st.pydeck_chart(
-            pdk.Deck(
-                map_style=None,
-                initial_view_state=pdk.ViewState(
-                    latitude=0,
-                    longitude=0,
-                    zoom=2,
-                    pitch=55,
-                    bearing=30,
-                ),
-                layers=[
-                    pdk.Layer(
-                        "ColumnLayer",
-                        data=chart_data,
-                        get_position="[x, y, z]",
-                        get_elevation="radius * 3",
-                        elevation_scale=10,
-                        radius=20,
-                        get_fill_color="color",
-                        pickable=True,
-                        auto_highlight=True,
-                    ),
-                ],
-            )
-        )
-    except Exception:
-        st.info("3D visualizer initialized. Inspecting components via tabular layout below.")
-
-    st.markdown("### Structural & Thermal Component Audit")
-    st.dataframe(chart_data[["name", "z", "radius"]], use_container_width=True, hide_index=True)
-
-
-# ============================================================
-# MODULE 2: FLIGHT PROFILE & THERMAL SIMULATION
-# ============================================================
-
-elif page == "Flight Profile & Thermal Simulation":
-    st.title("Multi-Phase Flight & Combustion Simulation")
-    st.caption("Calculate Max-Q, acoustic shear, and thermal behavior across atmospheric layers (0 to 250,000 ft).")
-
-    selected_phase_key = st.selectbox(
-        "Select Flight Mission Phase",
-        list(FLIGHT_PROFILES.keys()),
-        format_func=lambda x: FLIGHT_PROFILES[x]["name"],
-    )
-    phase = FLIGHT_PROFILES[selected_phase_key]
-
-    st.markdown(f'<div class="ag-panel">', unsafe_allow_html=True)
-    st.markdown(f"### Phase Details: {phase['name']}")
-    st.write(phase["description"])
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Altitude", f"{phase['altitude_ft']:,} ft")
-    with col2:
-        st.metric("External Temp", f"{phase['external_temp_c']} °C")
-    with col3:
-        st.metric("Dynamic Pressure (Max-Q)", f"{phase['dynamic_pressure_kpa']} kPa")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    psi_df = load_nasa_psi_database()
-    st.markdown("### Correlated NASA PSI-117 Combustion Datasets")
-    st.dataframe(psi_df, use_container_width=True, hide_index=True)
-
-
-# ============================================================
-# MODULE 3: NASA DATASET EXPLORER & DOIs
-# ============================================================
-
-elif page == "NASA Dataset Explorer & DOIs":
-    st.title("NASA PSI-117 Experimental Data Explorer")
-    st.caption("Browse canonical combustion records with verifiable DOI citations for academic review.")
-
-    psi_df = load_nasa_psi_database()
-    
-    search_fuel = st.selectbox("Filter by Fuel Type", ["All"] + list(psi_df["Fuel"].unique()))
-    if search_fuel != "All":
-        filtered_df = psi_df[psi_df["Fuel"] == search_fuel]
-    else:
-        filtered_df = psi_df
-
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-    
-    st.markdown("### Verified DOI Citation References")
-    for idx, row in filtered_df.iterrows():
-        st.markdown(f"- **{row['Data File']}** ({row['Fuel']}, $d_0$: {row['do (mm)']} mm, P: {row['P (atm)']} atm) — [Access DOI Reference]({row['Reference']})")
-
-
-# ============================================================
-# MODULE 4: DATA QUALITY & PROVENANCE AUDIT
-# ============================================================
-
-elif page == "Data Quality & Provenance Audit":
-    st.title("Data Quality & Audit Log")
-    st.caption("Audit uploaded numerical files, SHA-256 validation hashes, and column metrics.")
-
-    uploaded_files = st.file_uploader(
-        "Upload custom CSV or spreadsheet files for verification",
-        type=["csv", "xlsx", "xls", "zip"],
-        accept_multiple_files=True,
-    )
-
-    if uploaded_files:
-        for uploaded in uploaded_files:
-            logs, frames, texts = inspect_upload(uploaded)
-            st.session_state.file_log.extend(logs)
-            for name, df, digest in frames:
-                st.session_state.datasets.append({"source": name, "sha256": digest, "data": df})
-        st.success("Files processed successfully.")
-
-    if st.session_state.file_log:
-        st.dataframe(pd.DataFrame(st.session_state.file_log), use_container_width=True, hide_index=True)
-    else:
-        st.info("No custom user files uploaded yet. System operating on default NASA PSI-117 database.")
-
-
-# ============================================================
-# MODULE 5: STUDENT INTERACTIVE LAB
-# ============================================================
-
-elif page == "Student Interactive Lab":
-    st.title("🎓 Student Interactive Learning Lab")
-    st.caption("Learn how aerospace combustion, droplet diameter, and atmospheric pressure interact during rocket ascent.")
-
-    st.markdown(
-        """
-        Welcome to the **AeroGuard Learning Lab**! Designed specifically for students looking to master aerospace safety and combustion physics. 
-        Use the interactive controls below to simulate how droplet size and chamber pressure affect flame stability.
-        """
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        droplet_size = st.slider("Initial Droplet Diameter ($d_0$ in mm)", 0.1, 5.0, 2.0, 0.1)
-        chamber_pressure = st.slider("Chamber Pressure ($P$ in atm)", 0.5, 5.0, 1.0, 0.25)
-    with col2:
-        oxygen_conc = st.slider("Oxygen Concentration ($X_{O_2}$ %)", 15, 35, 21, 1)
-
-    burn_rate_estimation = round(droplet_size * 1.414 * (chamber_pressure ** 0.5) * (oxygen_conc / 21.0), 3)
-
-    st.markdown(f'<div class="ag-panel">', unsafe_allow_html=True)
-    st.markdown("### Simulated Combustion Output")
-    st.metric("Estimated Burning Rate Parameter ($K$)", f"{burn_rate_estimation} mm²/s")
-    st.markdown(
-        f"""
-        **Educational Insight:** Notice how increasing the chamber pressure ($P = {chamber_pressure}\\text{{ atm}}$) and oxygen concentration accelerates the burning rate, whereas larger initial droplet diameters ($d_0 = {droplet_size}\\text{{ mm}}$) require more thermal energy to achieve ignition delay.
-        """
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ============================================================
-# MODULE 6: COMBUSTION THEORY & SAFETY PRIMER
-# ============================================================
-
-elif page == "Combustion Theory & Safety Primer":
-    st.title("📖 Combustion Theory & Safety Primer")
-    st.caption("Foundational concepts in droplet combustion, cool flames, and aerospace fire hazards.")
-
-    st.markdown(
-        """
-        ### 1. What are Cool Flames?
-        Cool flames occur at relatively low temperatures (around 400°C to 600°C) compared to normal roaring fires. In microgravity and high-altitude aerospace environments, droplet combustion exhibits unique cool-flame oscillations that are critical to model for spacecraft safety.
-
-        ### 2. NASA PSI-117 Dataset Significance
-        The PSI-117 dataset records droplet combustion trials of $n$-heptane and $n$-dodecane under controlled ambient pressures and oxygen levels. Researchers analyze these to prevent unexpected ignition or flame extinction in aerospace propulsion systems.
-
-        ### 3. Why Data Provenance Matters for Research
-        When publishing papers in aerospace engineering, every simulation constant must be traceable to verifiable experimental data with valid DOI references. AeroGuard Sim ensures 100% transparency for academic reviewers.
-        """
-    )
-
-# ---------------------------- FOOTER -------------------------
-
+# Main hero
 st.markdown(
-    """
-    <div style="border-top:1px solid #173653;margin-top:22px;padding-top:12px;
-                color:#7895af;font-size:.68rem">
-      AEROGUARD SIM · RESEARCH & LEARNING PLATFORM · NASA PSI-117 INTEGRATED ·
-      DESIGNED FOR RESEARCH SCHOLARS, PROFESSORS, AND STUDENTS
-    </div>
-    """,
+    '<div class="hero"><div class="eyebrow">AEROGUARD / FLIGHT & FIRE SAFETY INTELLIGENCE</div>'
+    '<h1>Explore the physics behind safer spaceflight.</h1>'
+    '<p>A research workspace connecting microgravity combustion evidence, aerospace environments and transparent simulation assumptions.</p></div>',
     unsafe_allow_html=True,
 )
+st.write("")
+
+if page == "Mission overview & 3D vehicle":
+    st.subheader("Mission overview")
+    a,b,c,d = st.columns(4)
+    with a: kpi("Research investigation", "PSI-117", "NASA Physical Sciences Informatics")
+    with b: kpi("Reference vehicle", "SLS Block 1", "Published NASA vehicle configuration")
+    with c: kpi("Vehicle height", "98.3 m", "NASA SLS reference guide")
+    with d: kpi("Launch thrust", "36,786 kN", "Approximate SLS Block 1 launch thrust")
+    st.write("")
+    left,right = st.columns([1.6,1])
+    with left:
+        st.markdown("### Interactive 3D vehicle explorer")
+        exploded = st.toggle("Exploded component spacing", value=False)
+        st.plotly_chart(rocket_figure(exploded), use_container_width=True)
+        st.caption("Schematic 3D representation for orientation and teaching. It is not a dimensionally complete CAD model or flight-certified configuration.")
+    with right:
+        st.markdown("### Vehicle reference data")
+        st.metric("Core stage height", "64.6 m")
+        st.metric("Core stage diameter", "8.4 m")
+        st.metric("RS-25 engines", "4")
+        st.metric("Five-segment solid boosters", "2")
+        st.markdown("**Major core-stage sections**")
+        st.markdown("- Forward skirt and avionics\n- Liquid oxygen (LOX) tank\n- Intertank\n- Liquid hydrogen (LH2) tank\n- Engine section and four RS-25 engines")
+        st.markdown(f"[NASA SLS Core Stage reference]({NASA_SLS_URL})")
+        st.markdown(f"[NASA SLS Reference Guide (PDF)]({NASA_SLS_GUIDE})")
+    st.info("AeroGuard's combustion research focus remains PSI-117/FLEX-derived cool-flame and thermo-convective behaviour. SLS is a separate vehicle-context layer; PSI-117 droplet-fuel data must not be treated as SLS propellant-performance data.")
+
+elif page == "Launch environment & trajectory":
+    st.subheader("Launch environment explorer")
+    st.caption("Scenario presets provide context only. This page does not solve a launch vehicle's six-degree-of-freedom trajectory.")
+    phase_name = st.selectbox("Scenario phase", list(FLIGHT_PHASES))
+    phase = FLIGHT_PHASES[phase_name]
+    c1,c2,c3 = st.columns(3)
+    with c1: st.metric("Scenario altitude", f"{phase['altitude_km']:.1f} km")
+    with c2: st.metric("Vehicle reference", "SLS Block 1")
+    with c3: st.metric("Model status", "Illustrative")
+    st.markdown(f'<div class="panel">{phase["description"]}</div>', unsafe_allow_html=True)
+    progress = st.slider("Illustrative animation progress", 0, 100, 35, 1)
+    st.plotly_chart(trajectory_figure(progress), use_container_width=True)
+    st.caption("The curve is a visual placeholder. No thrust integration, mass depletion, gravity turn, atmospheric drag, wind, staging logic or guidance law is computed.")
+    st.markdown("### Environmental inputs")
+    x,y,z = st.columns(3)
+    with x: ambient_temp = st.slider("Ambient temperature (°C)", -100, 40, -20)
+    with y: pressure_kpa = st.slider("Ambient pressure (kPa)", 0, 105, 80)
+    with z: wind_ms = st.slider("Crosswind speed (m/s)", 0, 40, 5)
+    st.write(f"Selected scenario inputs: **{ambient_temp} °C**, **{pressure_kpa} kPa**, **{wind_ms} m/s**.")
+    st.warning("These inputs are recorded as scenario settings only. No validated thermal-load or structural-safety conclusion is calculated from them.")
+
+elif page == "PSI-117 dataset explorer":
+    st.subheader("NASA PSI-117 research context")
+    st.write(STUDY_TITLE)
+    st.markdown(f"[Open NASA PSI repository]({PSI_URL})")
+    st.info("The supplied source code referenced an Excel workbook, but that workbook was not included with the code file. The table below is therefore not fabricated: upload the actual PSI-117 workbook or exported data to inspect it here.")
+    dataset_files = st.file_uploader("Upload PSI-117 data (CSV, XLSX, XLS or ZIP)", type=["csv","xlsx","xls","zip"], accept_multiple_files=True, key="psi_upload")
+    if dataset_files:
+        new_files = [f for f in dataset_files if f.name not in st.session_state.processed_names]
+        if new_files:
+            records,tables,texts = load_uploaded_bundle(new_files)
+            st.session_state.uploaded_records.extend(records)
+            st.session_state.uploaded_tables.extend(tables)
+            st.session_state.uploaded_text.extend(texts)
+            st.session_state.processed_names.update(f.name for f in new_files)
+    if st.session_state.uploaded_tables:
+        names = [name for name,_,_ in st.session_state.uploaded_tables]
+        chosen = st.selectbox("Select uploaded table", names)
+        item = next(x for x in st.session_state.uploaded_tables if x[0] == chosen)
+        df = item[1]
+        st.caption(f"Source: {chosen} · SHA-256: {item[2]}")
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        numeric = df.select_dtypes(include=np.number).columns.tolist()
+        if numeric:
+            col = st.selectbox("Plot numeric variable", numeric)
+            plot_df = df[[col]].dropna().reset_index(names="Row")
+            st.plotly_chart(px.line(plot_df, x="Row", y=col, title=f"{col} by row"), use_container_width=True)
+        st.download_button("Download selected table as CSV", df.to_csv(index=False).encode("utf-8"), file_name="aeroguard_selected_data.csv", mime="text/csv")
+    else:
+        st.warning("No experimental table loaded yet. Please upload the original source data before drawing scientific conclusions.")
+    if st.session_state.uploaded_text:
+        with st.expander("Read accompanying text / metadata"):
+            for name,content in st.session_state.uploaded_text:
+                st.markdown(f"**{name}**")
+                st.text(content[:12000])
+
+elif page == "Data quality & provenance":
+    st.subheader("Data quality and provenance audit")
+    files = st.file_uploader("Upload research files for hashing and inspection", type=["csv","xlsx","xls","zip","txt","md","json"], accept_multiple_files=True, key="audit_upload")
+    if files:
+        new_files = [f for f in files if f.name not in st.session_state.processed_names]
+        if new_files:
+            records,tables,texts = load_uploaded_bundle(new_files)
+            st.session_state.uploaded_records.extend(records)
+            st.session_state.uploaded_tables.extend(tables)
+            st.session_state.uploaded_text.extend(texts)
+            st.session_state.processed_names.update(f.name for f in new_files)
+    if st.session_state.uploaded_records:
+        audit = pd.DataFrame(st.session_state.uploaded_records)
+        st.dataframe(audit, use_container_width=True, hide_index=True)
+        st.download_button("Export provenance log", audit.to_csv(index=False).encode(), "aeroguard_provenance_log.csv", "text/csv")
+    else:
+        st.info("No files audited in this session.")
+    if st.session_state.uploaded_tables:
+        st.markdown("### Imported table inventory")
+        inventory = pd.DataFrame([{"Source":n,"Rows":len(df),"Columns":len(df.columns),"SHA-256":digest} for n,df,digest in st.session_state.uploaded_tables])
+        st.dataframe(inventory, use_container_width=True, hide_index=True)
+        st.markdown("### Missing-value summary")
+        chosen = st.selectbox("Choose table for quality checks", [n for n,_,_ in st.session_state.uploaded_tables])
+        df = next(x[1] for x in st.session_state.uploaded_tables if x[0] == chosen)
+        missing = pd.DataFrame({"Column":df.columns,"Missing values":df.isna().sum().values,"Missing (%)":(df.isna().mean().values*100).round(2)})
+        st.dataframe(missing, use_container_width=True, hide_index=True)
+
+elif page == "Launch site explorer":
+    st.subheader("Launch site locator")
+    site = st.selectbox("Choose a launch site", list(LAUNCH_SITES))
+    default_lat,default_lon = LAUNCH_SITES[site]
+    c1,c2 = st.columns(2)
+    with c1: lat = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=float(default_lat), step=0.001, format="%.4f")
+    with c2: lon = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=float(default_lon), step=0.001, format="%.4f")
+    map_view(lat,lon)
+    st.caption(f"Selected coordinates: {lat:.4f}°, {lon:.4f}°. The map pin is user-selected; no launch authorization or site suitability is implied.")
+
+elif page == "Combustion parameter lab":
+    st.subheader("Droplet combustion parameter exploration")
+    st.caption("Educational sensitivity explorer. This is not a validated kinetic mechanism or a substitute for PSI-117 experimental data.")
+    c1,c2 = st.columns(2)
+    with c1:
+        d0 = st.slider("Initial droplet diameter, d₀ (mm)", 0.1, 5.0, 2.0, 0.1)
+        pressure = st.slider("Ambient pressure (atm)", 0.5, 5.0, 1.0, 0.25)
+    with c2:
+        oxygen = st.slider("Oxygen concentration, Xₒ₂ (%)", 10, 35, 21, 1)
+        temp = st.slider("Initial ambient temperature (K)", 250, 450, 300, 5)
+    # Retained only as a clearly-labelled heuristic from the submitted prototype.
+    heuristic = d0 * 1.414 * np.sqrt(pressure) * (oxygen/21.0)
+    st.metric("Prototype heuristic output", f"{heuristic:.3f} (unvalidated units)")
+    st.warning("This preserves the original prototype's formula for comparison only. It is not called a burning-rate constant (K), and no physical unit is assigned until the equation is validated.")
+    st.markdown("### One-factor sensitivity")
+    d_values = np.linspace(0.1,5.0,50)
+    curve = pd.DataFrame({"Droplet diameter (mm)":d_values,
+                          "Prototype output":d_values*1.414*np.sqrt(pressure)*(oxygen/21.0)})
+    st.plotly_chart(px.line(curve,x="Droplet diameter (mm)",y="Prototype output"),use_container_width=True)
+    st.markdown("### Research variables to connect when source data is available")
+    st.write("Ignition delay · flame stand-off diameter · extinction diameter · oscillation frequency · droplet diameter · temperature · pressure · time")
+
+elif page == "Combustion theory & safety":
+    st.subheader("Combustion theory & aerospace fire safety")
+    st.markdown("""
+    ### Cool flames and microgravity
+    Cool-flame chemistry involves low-temperature oxidation pathways and can exhibit behaviour that differs from conventional hot flames. In microgravity, buoyancy-driven convection is strongly reduced, changing flame shape, transport and extinction behaviour.
+
+    ### Why FLEX / PSI data matters
+    NASA's Physical Sciences Informatics repository hosts investigations and datasets used to study physical phenomena in spaceflight environments. PSI-117 is listed as a ground investigation concerning external thermo-convective perturbations and cool-flame dynamics, using FLEX-related data and multiphysics modelling.
+
+    ### Keep the evidence chain clear
+    - Experimental observations should be labelled as measured data.
+    - Model outputs should be labelled as simulated or inferred.
+    - Assumptions, units, uncertainty and source files should be recorded.
+    - A rocket's propulsion system and a droplet-combustion experiment are different physical systems. Do not transfer fuel properties or correlations between them without a defensible model.
+    """)
+    st.markdown(f"[NASA PSI repository]({PSI_URL}) · [NASA overview of microgravity combustion research](https://science.nasa.gov/physical-sciences-informatics-psi/)")
+
+st.divider()
+st.caption("AEROGUARD SIM · Research & Learning Platform · NASA PSI context · SLS vehicle reference. Educational prototype; not flight software, certification evidence or an operational safety system.")
